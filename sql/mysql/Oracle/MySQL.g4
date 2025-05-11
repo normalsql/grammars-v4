@@ -1,4 +1,12 @@
-grammar MySQLParser;
+grammar MySQL;
+
+/*
+  Copyright 2025 Jason Osgood
+
+  Refactoring MySQL.g4 to adopt NormalSQL's rules, idioms, and style. Goal is to emit
+  a common parse tree across multiple dialects.
+
+*/
 
 /*
  * Copyright © 2025, Oracle and/or its affiliates
@@ -45,7 +53,7 @@ statement
     | insertStatement
     | loadStatement
     | replaceStatement
-    | selectStatement
+    | select
     | updateStatement
     | transactionOrLockingStatement
     | replicationStatement
@@ -122,8 +130,8 @@ alterStatement
     : 'ALTER' (
         alterTable
         | alterDatabase
-        | 'PROCEDURE' procedureRef (routineCreateOption+)?
-        | 'FUNCTION' functionRef (routineCreateOption+)?
+        | 'PROCEDURE' qualifiedIdentifier (routineCreateOption+)?
+        | 'FUNCTION' qualifiedIdentifier (routineCreateOption+)?
         | alterView
         | alterEvent
         | alterTablespace
@@ -136,7 +144,7 @@ alterStatement
     ;
 
 alterDatabase
-    : 'DATABASE' schemaRef alterDatabaseOption+
+    : 'DATABASE' identifier alterDatabaseOption+
     ;
 
 alterDatabaseOption
@@ -145,7 +153,7 @@ alterDatabaseOption
     ;
 
 alterEvent
-    : definerClause? 'EVENT' eventRef ('ON' 'SCHEDULE' schedule)? (
+    : definerClause? 'EVENT' qualifiedIdentifier ('ON' 'SCHEDULE' schedule)? (
         'ON' 'COMPLETION' 'NOT'? 'PRESERVE'
     )? ('RENAME' 'TO' identifier)? (
         'ENABLE'
@@ -154,7 +162,7 @@ alterEvent
     ;
 
 alterLogfileGroup
-    : 'LOGFILE' 'GROUP' logfileGroupRef 'ADD' 'UNDOFILE' textLiteral alterLogfileGroupOptions?
+    : 'LOGFILE' 'GROUP' identifier 'ADD' 'UNDOFILE' textLiteral alterLogfileGroupOptions?
     ;
 
 alterLogfileGroupOptions
@@ -168,7 +176,7 @@ alterLogfileGroupOption
     ;
 
 alterServer
-    : 'SERVER' serverRef serverOptions
+    : 'SERVER' textOrIdentifier serverOptions
     ;
 
 alterTable
@@ -242,19 +250,19 @@ alterListItem
         | '(' tableElementList ')'
     )
     | 'ADD' tableConstraintDef
-    | 'CHANGE' 'COLUMN'? columnInternalRef identifier fieldDefinition place?
-    | 'MODIFY' 'COLUMN'? columnInternalRef fieldDefinition place?
+    | 'CHANGE' 'COLUMN'? identifier identifier fieldDefinition place?
+    | 'MODIFY' 'COLUMN'? identifier fieldDefinition place?
     | 'DROP' (
-        'COLUMN'? columnInternalRef restrict?
-        | 'FOREIGN' 'KEY' columnInternalRef
+        'COLUMN'? identifier restrict?
+        | 'FOREIGN' 'KEY' identifier
         | 'PRIMARY' 'KEY'
-        | keyOrIndex indexRef
+        | keyOrIndex fieldIdentifier
         | 'CHECK' identifier
         | 'CONSTRAINT' identifier
     )
     | 'DISABLE' 'KEYS'
     | 'ENABLE' 'KEYS'
-    | 'ALTER' 'COLUMN'? columnInternalRef (
+    | 'ALTER' 'COLUMN'? identifier (
         'SET' 'DEFAULT' (
             exprWithParentheses
             | signedLiteralOrNull
@@ -262,12 +270,12 @@ alterListItem
         | 'DROP' 'DEFAULT'
         | 'SET' visibility
     )
-    | 'ALTER' 'INDEX' indexRef visibility
+    | 'ALTER' 'INDEX' fieldIdentifier visibility
     | 'ALTER' 'CHECK' identifier constraintEnforcement
     | 'ALTER' 'CONSTRAINT' identifier constraintEnforcement
-    | 'RENAME' 'COLUMN' columnInternalRef 'TO' identifier
+    | 'RENAME' 'COLUMN' identifier 'TO' identifier
     | 'RENAME' ('TO' | 'AS')? tableName
-    | 'RENAME' keyOrIndex indexRef 'TO' indexName
+    | 'RENAME' keyOrIndex fieldIdentifier 'TO' identifier
     | 'CONVERT' 'TO' charset (
         'DEFAULT'
         | charsetName
@@ -317,7 +325,7 @@ allOrPartitionNameList
     ;
 
 alterTablespace
-    : 'TABLESPACE' tablespaceRef (
+    : 'TABLESPACE' identifier (
         ('ADD' | 'DROP') 'DATAFILE' textLiteral alterTablespaceOptions?
         | 'RENAME' 'TO' identifier
         | alterTablespaceOptions
@@ -325,7 +333,7 @@ alterTablespace
     ;
 
 alterUndoTablespace
-    : 'UNDO' 'TABLESPACE' tablespaceRef 'SET' (
+    : 'UNDO' 'TABLESPACE' identifier 'SET' (
         'ACTIVE'
         | 'INACTIVE'
     ) undoTableSpaceOptions?
@@ -362,11 +370,11 @@ alterView
 // This is not the full view_tail from sql_yacc.yy as we have either a view name or a view reference,
 // depending on whether we come from createView or alterView. Everything until this difference is duplicated in those rules.
 viewTail
-    : columnInternalRefList? 'AS' viewQueryBlock
+    : columns? 'AS' viewQueryBlock
     ;
 
 viewQueryBlock
-    : queryExpressionWithOptLockingClauses viewCheckOption?
+    : select viewCheckOption?
     ;
 
 viewCheckOption
@@ -410,7 +418,7 @@ createStatement
     ;
 
 createDatabase
-    : 'DATABASE' ifNotExists? schemaName createDatabaseOption*
+    : 'DATABASE' ifNotExists? identifier createDatabaseOption*
     ;
 
 createDatabaseOption
@@ -441,7 +449,7 @@ duplicateAsQe
     ;
 
 asCreateQueryExpression
-    : 'AS'? queryExpressionWithOptLockingClauses
+    : 'AS'? select
     ;
 
 //queryExpressionOrParens
@@ -449,17 +457,13 @@ asCreateQueryExpression
 //    | queryExpressionParens
 //    ;
 
-queryExpressionWithOptLockingClauses
-    : queryExpression (lockingClause+)?
-    ;
-
 //createRoutine
 //    : // Rule for external use only.
 //    'CREATE' (createProcedure | createFunction | createUdf) ';'? EOF
 //    ;
 
 createProcedure
-    : definerClause? 'PROCEDURE' ifNotExists? procedureName '(' (
+    : definerClause? 'PROCEDURE' ifNotExists? qualifiedIdentifier '(' (
         procedureParameter (',' procedureParameter)*
     )? ')' routineCreateOption* storedRoutineBody
     ;
@@ -475,7 +479,7 @@ storedRoutineBody
     ;
 
 createFunction
-    : definerClause? 'FUNCTION' ifNotExists? functionName '(' (
+    : definerClause? 'FUNCTION' ifNotExists? qualifiedIdentifier '(' (
         functionParameter (',' functionParameter)*
     )? ')' 'RETURNS' typeWithOptCollate routineCreateOption* storedRoutineBody
     ;
@@ -507,16 +511,16 @@ routineOption
 
 createIndex
     : onlineOption? (
-        'UNIQUE'? 'INDEX' indexName indexTypeClause? createIndexTarget indexOption*
-        | 'FULLTEXT' 'INDEX' indexName createIndexTarget fulltextIndexOption*
-        | 'SPATIAL' 'INDEX' indexName createIndexTarget (commonIndexOption)*
+        'UNIQUE'? 'INDEX' identifier indexTypeClause? createIndexTarget indexOption*
+        | 'FULLTEXT' 'INDEX' identifier createIndexTarget fulltextIndexOption*
+        | 'SPATIAL' 'INDEX' identifier createIndexTarget (commonIndexOption)*
     ) indexLockAndAlgorithm?
     ;
 
 indexNameAndType
-    : indexName
-    | indexName? 'USING' indexType
-    | indexName 'TYPE' indexType
+    : identifier
+    | (identifier)? 'USING' indexType
+    | identifier 'TYPE' indexType
     ;
 
 createIndexTarget
@@ -524,7 +528,7 @@ createIndexTarget
     ;
 
 createLogfileGroup
-    : 'LOGFILE' 'GROUP' logfileGroupName 'ADD' 'UNDOFILE' textLiteral logfileGroupOptions?
+    : 'LOGFILE' 'GROUP' identifier 'ADD' 'UNDOFILE' textLiteral logfileGroupOptions?
     ;
 
 logfileGroupOptions
@@ -541,7 +545,7 @@ logfileGroupOption
     ;
 
 createServer
-    : 'SERVER' serverName 'FOREIGN' 'DATA' 'WRAPPER' textOrIdentifier serverOptions
+    : 'SERVER' textOrIdentifier 'FOREIGN' 'DATA' 'WRAPPER' textOrIdentifier serverOptions
     ;
 
 serverOptions
@@ -560,13 +564,13 @@ serverOption
     ;
 
 createTablespace
-    : 'TABLESPACE' tablespaceName tsDataFileName? (
-        'USE' 'LOGFILE' 'GROUP' logfileGroupRef
+    : 'TABLESPACE' identifier tsDataFileName? (
+        'USE' 'LOGFILE' 'GROUP' identifier
     )? tablespaceOptions?
     ;
 
 createUndoTablespace
-    : 'UNDO' 'TABLESPACE' tablespaceName 'ADD' tsDataFile undoTableSpaceOptions?
+    : 'UNDO' 'TABLESPACE' identifier 'ADD' tsDataFile undoTableSpaceOptions?
     ;
 
 tsDataFileName
@@ -619,7 +623,7 @@ tsOptionNodegroup
     ;
 
 tsOptionEngine
-    : 'STORAGE'? 'ENGINE' '='? engineRef
+    : 'STORAGE'? 'ENGINE' '='? textOrIdentifier
     ;
 
 tsOptionWait
@@ -664,7 +668,7 @@ viewSuid
     ;
 
 createTrigger
-    : definerClause? 'TRIGGER' ifNotExists? triggerName (
+    : definerClause? 'TRIGGER' ifNotExists? qualifiedIdentifier (
         'BEFORE'
         | 'AFTER'
     ) ('INSERT' | 'UPDATE' | 'DELETE') 'ON' tableRef 'FOR' 'EACH' 'ROW'
@@ -676,7 +680,7 @@ triggerFollowsPrecedesClause
     ;
 
 createEvent
-    : definerClause? 'EVENT' ifNotExists? eventName 'ON' 'SCHEDULE' schedule (
+    : definerClause? 'EVENT' ifNotExists? qualifiedIdentifier 'ON' 'SCHEDULE' schedule (
         'ON' 'COMPLETION' 'NOT'? 'PRESERVE'
     )? ('ENABLE' | 'DISABLE' ('ON' replica)?)? (
         'COMMENT' textLiteral
@@ -722,27 +726,27 @@ dropStatement
     ;
 
 dropDatabase
-    : 'DATABASE' ifExists? schemaRef
+    : 'DATABASE' ifExists? identifier
     ;
 
 dropEvent
-    : 'EVENT' ifExists? eventRef
+    : 'EVENT' ifExists? qualifiedIdentifier
     ;
 
 dropFunction
-    : 'FUNCTION' ifExists? functionRef // Including UDFs.
+    : 'FUNCTION' ifExists? qualifiedIdentifier // Including UDFs.
     ;
 
 dropProcedure
-    : 'PROCEDURE' ifExists? procedureRef
+    : 'PROCEDURE' ifExists? qualifiedIdentifier
     ;
 
 dropIndex
-    : onlineOption? 'INDEX' indexRef 'ON' tableRef indexLockAndAlgorithm?
+    : onlineOption? 'INDEX' fieldIdentifier 'ON' tableRef indexLockAndAlgorithm?
     ;
 
 dropLogfileGroup
-    : 'LOGFILE' 'GROUP' logfileGroupRef (
+    : 'LOGFILE' 'GROUP' identifier (
         dropLogfileGroupOption (','? dropLogfileGroupOption)*
     )?
     ;
@@ -753,7 +757,7 @@ dropLogfileGroupOption
     ;
 
 dropServer
-    : 'SERVER' ifExists? serverRef
+    : 'SERVER' ifExists? textOrIdentifier
     ;
 
 dropTable
@@ -764,13 +768,13 @@ dropTable
     ;
 
 dropTableSpace
-    : 'TABLESPACE' tablespaceRef (
+    : 'TABLESPACE' identifier (
         dropLogfileGroupOption (','? dropLogfileGroupOption)*
     )?
     ;
 
 dropTrigger
-    : 'TRIGGER' ifExists? triggerRef
+    : 'TRIGGER' ifExists? qualifiedIdentifier
     ;
 
 dropView
@@ -786,7 +790,7 @@ dropSpatialReference
     ;
 
 dropUndoTablespace
-    : 'UNDO' 'TABLESPACE' tablespaceRef undoTableSpaceOptions?
+    : 'UNDO' 'TABLESPACE' identifier undoTableSpaceOptions?
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -816,17 +820,17 @@ importStatement
 //--------------- DML statements ---------------------------------------------------------------------------------------
 
 callStatement
-    : 'CALL' procedureRef ('(' exprList? ')')?
+    : 'CALL' qualifiedIdentifier ('(' exprList? ')')?
     ;
 
 deleteStatement
-    : withClause? 'DELETE' deleteStatementOption* (
+    : with? 'DELETE' deleteStatementOption* (
         'FROM' (
-            tableAliasRefList 'USING' tableReferenceList whereClause? // Multi table variant 1.
-            | tableRef (tableAlias)? partitionDelete? whereClause? orderClause? simpleLimitClause?
+            tableAliasRefList 'USING' tableReferenceList where? // Multi table variant 1.
+            | tableRef (tableAlias)? partitionDelete? where? orderBy? simpleLimitClause?
             // Single table delete.
         )
-        | tableAliasRefList 'FROM' tableReferenceList whereClause? // Multi table variant 2.
+        | tableAliasRefList 'FROM' tableReferenceList where? // Multi table variant 2.
     )
     ;
 
@@ -843,7 +847,7 @@ deleteStatementOption
     ;
 
 doStatement
-    : 'DO' selectItemList
+    : 'DO' items
     ;
 
 handlerStatement
@@ -851,7 +855,7 @@ handlerStatement
         tableRef 'OPEN' tableAlias?
         | identifier (
             'CLOSE'
-            | 'READ' handlerReadOrScan whereClause? limitClause?
+            | 'READ' handlerReadOrScan where? limit?
         )
     )
     ;
@@ -900,9 +904,9 @@ insertValues
     ;
 
 insertQueryExpression
-    : queryExpression
-    | queryExpressionParens
-    | ('(' fields? ')')? queryExpressionWithOptLockingClauses
+    : with? selectCore orderBy? limit?
+    | '(' select ')'
+    | ('(' fields? ')')? select
     ;
 
 valueList
@@ -916,7 +920,7 @@ values
     ;
 
 valuesReference
-    : 'AS' identifier columnInternalRefList?
+    : 'AS' identifier columns?
     ;
 
 insertUpdateList
@@ -974,9 +978,9 @@ loadDataFileTargetList
     ;
 
 fieldOrVariableList
-    : (columnRef | '@' textOrIdentifier | '@@') (
+    : (fieldIdentifier | '@' textOrIdentifier | '@@') (
         ',' (
-            columnRef
+            fieldIdentifier
             | '@' textOrIdentifier
             | AT_TEXT_SUFFIX
             | '@@'
@@ -1008,61 +1012,90 @@ replaceStatement
 
 //----------------------------------------------------------------------------------------------------------------------
 
-selectStatement
-    : queryExpression (lockingClause+)?
+/*
+select
+  : with?
+    selectCore (( 'UNION' 'ALL'? | 'INTERSECT' | 'EXCEPT' ) selectCore )*
+    orderBy? limit?
+  ;
+
+selectCore
+  : 'SELECT' unique? ( item ( ',' item )* ','? )?
+    from?
+    where?
+    // TODO decide between inlined or separate rules for GROUP BY and WINDOW
+    ( 'GROUP' 'BY' terms ( 'HAVING' term )? )?
+    ( 'WINDOW' window ( ',' window )* )?
+  | values
+  | '(' select ')'
+  ;
+
+  'SELECT'
+      ('ALL' | 'DISTINCT' | 'DISTINCTROW' )?
+      'HIGH_PRIORITY'?
+      'STRAIGHT_JOIN'?
+      'SQL_SMALL_RESULT'?
+      'SQL_BIG_RESULT'?
+      'SQL_BUFFER_RESULT'?
+      'SQL_NO_CACHE'?
+      'SQL_CALC_FOUND_ROWS'?
+      select_expr (',' select_expr)*
+      into_option?
+      ('FROM' table_references ( 'PARTITION' partition_list )? )?
+      ('WHERE' where_condition)?
+      ('GROUP' 'BY' (col_name | expr | position) ',' ... ('WITH' 'ROLLUP'))?
+      ('HAVING' where_condition)
+      ('WINDOW' window_name 'AS' '('window_spec)
+          (',' window_name 'AS' '('window_spec))? ...)?
+      ('ORDER' 'BY' (col_name | expr | position )
+        ('ASC' | 'DESC')',' ... ('WITH' 'ROLLUP'))?
+      ('LIMIT' ( ( offset ',')? row_count | row_count 'OFFSET' offset )?
+      into_option?
+      ('FOR' ('UPDATE' | 'SHARE'}
+          ('OF' tbl_name (',' tbl_name) ...)?
+          ('NOWAIT' | 'SKIP' 'LOCKED')
+        | 'LOCK' 'IN' 'SHARE' 'MODE')
+      into_option?
+*/
+
+select
+    : with? selectCore ( ( 'UNION' | 'EXCEPT' | 'INTERSECT' ) unionOption? selectCore )*
+      orderBy? limit? lockingClause*
     | selectStatementWithInto
     ;
 
-selectStatementWithInto
-    : '(' selectStatementWithInto ')'
-    | queryExpression intoClause (lockingClause+)?
-    | queryExpression lockingClause+ intoClause
-    | queryExpressionParens intoClause
-    ;
 
-queryExpression
-    : withClause? queryExpressionBody orderClause? limitClause?
-    ;
-
-queryExpressionBody
-    : (queryPrimary | queryExpressionParens)
-
-    // Unlimited UNIONS.
-    (
-        (
-            'UNION'
-            | ('EXCEPT' | 'INTERSECT')
-        ) unionOption? queryExpressionBody
-    )*
-    ;
-
-queryExpressionParens
-    : '(' (queryExpressionParens | queryExpressionWithOptLockingClauses) ')'
-    ;
-
-queryPrimary
-    : querySpecification
-    | tableValueConstructor
-    | explicitTable
-    ;
-
-querySpecification
-    : 'SELECT' selectOption* selectItemList intoClause? fromClause? whereClause? groupByClause? havingClause? windowClause?
+selectCore
+    : 'SELECT' unique? modifier* items intoClause? fromClause? where? groupByClause? havingClause? windowClause?
         qualifyClause?
+    | 'VALUES' rowValueExplicit (',' rowValueExplicit)*
+    | 'TABLE' tableRef
+    | '(' select ')'
     ;
 
-querySpecOption
-    : 'ALL'
-    | 'DISTINCT'
+unique
+    : 'ALL' | 'DISTINCT' | 'DISTINCTROW' ;
+
+modifier
+    : 'HIGH_PRIORITY'
     | 'STRAIGHT_JOIN'
-    | 'HIGH_PRIORITY'
     | 'SQL_SMALL_RESULT'
     | 'SQL_BIG_RESULT'
     | 'SQL_BUFFER_RESULT'
     | 'SQL_CALC_FOUND_ROWS'
+    | 'SQL_NO_CACHE'
     ;
 
-limitClause
+
+
+selectStatementWithInto
+    : '(' selectStatementWithInto ')'
+    | with? selectCore orderBy? limit? intoClause lockingClause*
+    | with? selectCore orderBy? limit? lockingClause+ intoClause
+    | '(' select ')' intoClause
+    ;
+
+limit
     : 'LIMIT' limitOptions
     ;
 
@@ -1115,7 +1148,7 @@ windowSpec
     ;
 
 windowSpecDetails
-    : (identifier)? ('PARTITION' 'BY' orderList)? orderClause? windowFrameClause?
+    : identifier? ('PARTITION' 'BY' orderList)? orderBy? windowFrameClause?
     ;
 
 windowFrameClause
@@ -1154,37 +1187,28 @@ windowFrameBound
     ;
 
 windowFrameExclusion
-    : 'EXCLUDE' (
-        'CURRENT' 'ROW'
-        | 'GROUP'
-        | 'TIES'
-        | 'NO' 'OTHERS'
-    )
+    : 'EXCLUDE'
+      ( 'CURRENT' 'ROW'
+      | 'GROUP'
+      | 'TIES'
+      | 'NO' 'OTHERS'
+      )
     ;
 
-withClause
-    : 'WITH' 'RECURSIVE'? commonTableExpression (
-        ',' commonTableExpression
-    )*
+with
+    : 'WITH' 'RECURSIVE'? cte ( ',' cte )*
     ;
 
-commonTableExpression
-    : identifier columnInternalRefList? 'AS' queryExpressionParens
+cte
+    : identifier columns? 'AS' '(' select ')'
     ;
 
 groupByClause
-    : 'GROUP' 'BY' orderList olapOption?
-    | 'GROUP' 'BY' (
-        'ROLLUP'
-        | 'CUBE'
-    ) '(' groupList ')'
+    : 'GROUP' 'BY' orderList ( 'WITH' 'ROLLUP' )?
+    | 'GROUP' 'BY' ( 'ROLLUP' | 'CUBE' ) '(' groupList ')'
     ;
 
-olapOption
-    : 'WITH' 'ROLLUP'
-    ;
-
-orderClause
+orderBy
     : 'ORDER' 'BY' orderList
     ;
 
@@ -1201,43 +1225,32 @@ tableReferenceList
     : tableReference (',' tableReference)*
     ;
 
-tableValueConstructor
-    : 'VALUES' rowValueExplicit (',' rowValueExplicit)*
-    ;
 
-explicitTable
-    : 'TABLE' tableRef
+tableReference
+    // Note: we have also a tableRef rule for identifiers that reference a table anywhere.
+    : ( tableFactor
+      // ODBC syntax
+      | '{' ( identifier | 'OJ' ) tableFactor joinedTable* '}'
+      )
+      joinedTable*
     ;
 
 rowValueExplicit
     : 'ROW' '(' values? ')'
     ;
 
-selectOption
-    : querySpecOption
-    | 'SQL_NO_CACHE' // Deprecated and ignored in 8.0.
-    ;
-
 lockingClause
-    : 'FOR' lockStrengh ('OF' tableAliasRefList)? lockedRowAction?
+    : 'FOR' ( 'UPDATE' | 'SHARE' ) ('OF' tableAliasRefList)? ( 'SKIP' 'LOCKED' | 'NOWAIT' )?
     | 'LOCK' 'IN' 'SHARE' 'MODE'
     ;
 
-lockStrengh
-    : 'UPDATE'
-    | 'SHARE'
+
+// TODO inline items rule once wildcard is sorted out
+items
+    : (item | '*') (',' item)*
     ;
 
-lockedRowAction
-    : 'SKIP' 'LOCKED'
-    | 'NOWAIT'
-    ;
-
-selectItemList
-    : (selectItem | '*') (',' selectItem)*
-    ;
-
-selectItem
+item
     : tableWild
     | expr selectAlias?
     ;
@@ -1246,25 +1259,13 @@ selectAlias
     : 'AS'? (identifier | textStringLiteral)
     ;
 
-whereClause
+where
     : 'WHERE' expr
     ;
 
-tableReference
-    : // Note: we have also a tableRef rule for identifiers that reference a table anywhere.
-    (
-        tableFactor
-        // ODBC syntax
-        | '{' ( identifier | 'OJ' ) escapedTableReference '}'
-    ) joinedTable*
-    ;
-
-escapedTableReference
-    : tableFactor joinedTable*
-    ;
-
 joinedTable
-    : // Same as joined_table in sql_yacc.yy, but with removed left recursion.
+    // Same as joined_table in sql_yacc.yy, but with removed left recursion.
+    :
     innerJoinType tableReference (
         'ON' expr
         | 'USING' identifierListWithParentheses
@@ -1307,8 +1308,8 @@ singleTableParens
     ;
 
 derivedTable
-    : queryExpressionParens tableAlias? columnInternalRefList?
-    | 'LATERAL' queryExpressionParens tableAlias? columnInternalRefList?
+    : '(' select ')' tableAlias? columns?
+    | 'LATERAL' '(' select ')' tableAlias? columns?
     ;
 
 // This rule covers both: joined_table_parens and table_reference_list_parens from sql_yacc.yy.
@@ -1406,8 +1407,8 @@ indexListElement
 //----------------------------------------------------------------------------------------------------------------------
 
 updateStatement
-    : withClause? 'UPDATE' 'LOW_PRIORITY'? 'IGNORE'? tableReferenceList 'SET' updateList whereClause?
-        orderClause? simpleLimitClause?
+    : with? 'UPDATE' 'LOW_PRIORITY'? 'IGNORE'? tableReferenceList 'SET' updateList where?
+        orderBy? simpleLimitClause?
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -1757,7 +1758,7 @@ filterDefinition
     ;
 
 filterDbList
-    : schemaRef (',' schemaRef)*
+    : identifier (',' identifier)*
     ;
 
 filterTableList
@@ -1969,7 +1970,7 @@ oldAlterUser
     ;
 
 userFunction
-    : 'USER' parentheses
+    : 'USER' '(' ')'
     ;
 
 createUserStatement
@@ -2112,10 +2113,10 @@ roleOrPrivilegesList
 
 roleOrPrivilege
     : (
-        roleIdentifierOrText columnInternalRefList?
+        roleIdentifierOrText columns?
         | roleIdentifierOrText (AT_TEXT_SUFFIX | '@' textOrIdentifier)
     )
-    | ('SELECT' | 'INSERT' | 'UPDATE' | 'REFERENCES') columnInternalRefList?
+    | ('SELECT' | 'INSERT' | 'UPDATE' | 'REFERENCES') columns?
     | ( 'DELETE' | 'USAGE' | 'INDEX' | 'DROP' | 'EXECUTE' | 'RELOAD' | 'SHUTDOWN' | 'PROCESS' | 'FILE' | 'PROXY' | 'SUPER' | 'EVENT' | 'TRIGGER' )
     | 'GRANT' 'OPTION'
     | 'SHOW' 'DATABASES'
@@ -2129,9 +2130,9 @@ roleOrPrivilege
 
 grantIdentifier
     : '*' ('.' '*')?
-    | schemaRef ('.' '*')?
+    | identifier ('.' '*')?
     | tableRef
-    | schemaRef '.' tableRef
+    | identifier '.' tableRef
     ;
 
 requireList
@@ -2243,20 +2244,13 @@ installSetValueList
 //----------------------------------------------------------------------------------------------------------------------
 
 setStatement
-    : 'SET' startOptionValueList
-    ;
-
-startOptionValueList
-    : optionValueNoOptionType (',' optionValue)*
-    | 'TRANSACTION' transactionCharacteristics
-    | optionType startOptionValueListFollowingOptionType
-    | 'PASSWORD' ('FOR' user)? equal (
-        textString replacePassword? retainCurrentPassword?
-        | textString replacePassword? retainCurrentPassword?
-        | 'PASSWORD' '(' textString ')'
-    )
-    | 'PASSWORD' ('FOR' user)? 'TO' 'RANDOM' replacePassword?
-        retainCurrentPassword?
+    : 'SET'
+      ( optionValueNoOptionType (',' optionValue)*
+      | 'TRANSACTION' transactionCharacteristics
+      | optionType startOptionValueListFollowingOptionType
+      | 'PASSWORD' ('FOR' user)? equal ( textString replacePassword? retainCurrentPassword? | textString replacePassword? retainCurrentPassword? | 'PASSWORD' '(' textString ')' )
+      | 'PASSWORD' ('FOR' user)? 'TO' 'RANDOM' replacePassword? retainCurrentPassword?
+      )
     ;
 
 transactionCharacteristics
@@ -2381,17 +2375,17 @@ showReplicasStatement
 showBinlogEventsStatement
     : 'SHOW' 'BINLOG' 'EVENTS' ('IN' textString)? (
         'FROM' ulonglongNumber
-    )? limitClause? channel?
+    )? limit? channel?
     ;
 
 showRelaylogEventsStatement
     : 'SHOW' 'RELAYLOG' 'EVENTS' ('IN' textString)? (
         'FROM' ulonglongNumber
-    )? limitClause? channel?
+    )? limit? channel?
     ;
 
 showKeysStatement
-    : 'SHOW' 'EXTENDED'? ('INDEX' | 'INDEXES' | 'KEYS') fromOrIn tableRef inDb? whereClause?
+    : 'SHOW' 'EXTENDED'? ('INDEX' | 'INDEXES' | 'KEYS') fromOrIn tableRef inDb? where?
     ;
 
 showEnginesStatement
@@ -2407,11 +2401,11 @@ showCountErrorsStatement
     ;
 
 showWarningsStatement
-    : 'SHOW' 'WARNINGS' limitClause?
+    : 'SHOW' 'WARNINGS' limit?
     ;
 
 showErrorsStatement
-    : 'SHOW' 'ERRORS' limitClause?
+    : 'SHOW' 'ERRORS' limit?
     ;
 
 showProfilesStatement
@@ -2421,7 +2415,7 @@ showProfilesStatement
 showProfileStatement
     : 'SHOW' 'PROFILE' profileDefinitions? (
         'FOR' 'QUERY' INT_NUMBER
-    )? limitClause?
+    )? limit?
     ;
 
 showStatusStatement
@@ -2453,7 +2447,7 @@ showGrantsStatement
     ;
 
 showCreateDatabaseStatement
-    : 'SHOW' 'CREATE' 'DATABASE' ifNotExists? schemaRef
+    : 'SHOW' 'CREATE' 'DATABASE' ifNotExists? identifier
     ;
 
 showCreateTableStatement
@@ -2473,15 +2467,15 @@ showReplicaStatusStatement
     ;
 
 showCreateProcedureStatement
-    : 'SHOW' 'CREATE' 'PROCEDURE' procedureRef
+    : 'SHOW' 'CREATE' 'PROCEDURE' qualifiedIdentifier
     ;
 
 showCreateFunctionStatement
-    : 'SHOW' 'CREATE' 'FUNCTION' functionRef
+    : 'SHOW' 'CREATE' 'FUNCTION' qualifiedIdentifier
     ;
 
 showCreateTriggerStatement
-    : 'SHOW' 'CREATE' 'TRIGGER' triggerRef
+    : 'SHOW' 'CREATE' 'TRIGGER' qualifiedIdentifier
     ;
 
 showCreateProcedureStatusStatement
@@ -2493,15 +2487,15 @@ showCreateFunctionStatusStatement
     ;
 
 showCreateProcedureCodeStatement
-    : 'SHOW' 'CREATE' 'PROCEDURE' 'CODE' procedureRef
+    : 'SHOW' 'CREATE' 'PROCEDURE' 'CODE' qualifiedIdentifier
     ;
 
 showCreateFunctionCodeStatement
-    : 'SHOW' 'CREATE' 'FUNCTION' 'CODE' functionRef
+    : 'SHOW' 'CREATE' 'FUNCTION' 'CODE' qualifiedIdentifier
     ;
 
 showCreateEventStatement
-    : 'SHOW' 'CREATE' 'EVENT' eventRef
+    : 'SHOW' 'CREATE' 'EVENT' qualifiedIdentifier
     ;
 
 showCreateUserStatement
@@ -2514,7 +2508,7 @@ showCommandType
     ;
 
 engineOrAll
-    : engineRef
+    : textOrIdentifier
     | 'ALL'
     ;
 
@@ -2704,7 +2698,7 @@ utilityStatement
 describeStatement
     : ('EXPLAIN' | 'DESCRIBE' | 'DESC') tableRef (
         textString
-        | columnRef
+        | fieldIdentifier
     )?
     ;
 
@@ -2724,7 +2718,7 @@ explainOptions
     ;
 
 explainableStatement
-    : selectStatement
+    : select
     | deleteStatement
     | insertStatement
     | replaceStatement
@@ -2741,7 +2735,7 @@ helpCommand
     ;
 
 useCommand
-    : 'USE' schemaRef
+    : 'USE' identifier
     ;
 
 restartServer
@@ -2764,7 +2758,7 @@ boolPri
     : predicate
     | boolPri 'IS' notRule? 'NULL'
     | boolPri compOp predicate
-    | boolPri compOp ('ALL' | 'ANY') queryExpressionParens
+    | boolPri compOp ('ALL' | 'ANY') '(' select ')'
     ;
 
 compOp
@@ -2786,7 +2780,7 @@ predicate
     ;
 
 predicateOperations
-    : 'IN' (queryExpressionParens | '(' exprList ')')
+    : 'IN' ('(' select ')' | '(' exprList ')')
     | 'BETWEEN' bitExpr 'AND' predicate
     | 'LIKE' simpleExpr ('ESCAPE' simpleExpr)?
     | 'REGEXP' bitExpr
@@ -2810,7 +2804,7 @@ bitExpr
     ;
 
 simpleExpr
-    : columnRef jsonOperator?
+    : fieldIdentifier jsonOperator?
     | runtimeFunctionCall
     | functionCall
     | simpleExpr 'COLLATE' textOrIdentifier
@@ -2825,7 +2819,7 @@ simpleExpr
     | ('+' | '-' | '~') simpleExpr
     | not2Rule simpleExpr
     | 'ROW'? '(' exprList ')'
-    | 'EXISTS'? queryExpressionParens
+    | 'EXISTS'? '(' select ')'
     | '{' identifier expr '}'
     | 'MATCH' identListArg 'AGAINST' '(' bitExpr fulltextOptions? ')'
     | 'BINARY' simpleExpr
@@ -2855,7 +2849,7 @@ sumExpr
     | ('MIN' | 'MAX') '(' 'DISTINCT'? inSumExpr ')' windowingClause?
     | ( 'STD' | 'VARIANCE' | 'STDDEV_SAMP' | 'VAR_SAMP' | 'SUM' ) '(' inSumExpr ')' windowingClause?
     | 'SUM' '(' 'DISTINCT' inSumExpr ')' windowingClause?
-    | 'GROUP_CONCAT' '(' 'DISTINCT'? exprList orderClause? ( 'SEPARATOR' textString )? ')' windowingClause?
+    | 'GROUP_CONCAT' '(' 'DISTINCT'? exprList orderBy? ( 'SEPARATOR' textString )? ')' windowingClause?
     ;
 
 groupingOperation
@@ -2869,7 +2863,7 @@ windowFunctionCall
         | 'DENSE_RANK'
         | 'CUME_DIST'
         | 'PERCENT_RANK'
-    ) parentheses windowingClause
+    ) '(' ')' windowingClause
     | 'NTILE' (
         '(' stableInteger ')'
         | simpleExprWithParentheses
@@ -2950,10 +2944,10 @@ fulltextOptions
 
 // function_call_keyword and function_call_nonkeyword in sql_yacc.yy.
 runtimeFunctionCall
-    :
     // Function names that are keywords.
+    :
     'CHAR' '(' exprList ('USING' charsetName)? ')'
-    | 'CURRENT_USER' parentheses?
+    | 'CURRENT_USER' ('(' ')')?
     | 'DATE' exprWithParentheses
     | 'DAY' exprWithParentheses
     | 'HOUR' exprWithParentheses
@@ -2974,7 +2968,7 @@ runtimeFunctionCall
 
     // Function names that are not keywords.
     | ('ADDDATE' | 'SUBDATE') '(' expr ',' ( expr | 'INTERVAL' expr interval ) ')'
-    | 'CURDATE' parentheses?
+    | 'CURDATE' ('(' ')')?
     | 'CURTIME' timeFunctionParameters?
     | ('DATE_ADD' | 'DATE_SUB') '(' expr ',' 'INTERVAL' expr interval ')'
     | 'EXTRACT' '(' interval 'FROM' expr ')'
@@ -2985,7 +2979,7 @@ runtimeFunctionCall
     | substringFunction
     | 'SYSDATE' timeFunctionParameters?
     | ('TIMESTAMPADD' | 'TIMESTAMPDIFF') '(' intervalTimeStamp ',' expr ',' expr ')'
-    | 'UTC_DATE' parentheses?
+    | 'UTC_DATE' ('(' ')')?
     | 'UTC_TIME' timeFunctionParameters?
     | 'UTC_TIMESTAMP' timeFunctionParameters?
 
@@ -2994,7 +2988,7 @@ runtimeFunctionCall
     | 'CHARSET' exprWithParentheses
     | 'COALESCE' exprListWithParentheses
     | 'COLLATION' exprWithParentheses
-    | 'DATABASE' parentheses
+    | 'DATABASE' '(' ')'
     | 'IF' '(' expr ',' expr ',' expr ')'
     | 'FORMAT' '(' expr ',' expr (',' expr)? ')'
     | 'MICROSECOND' exprWithParentheses
@@ -3004,7 +2998,7 @@ runtimeFunctionCall
     | 'REPEAT' '(' expr ',' expr ')'
     | 'REPLACE' '(' expr ',' expr ',' expr ')'
     | 'REVERSE' exprWithParentheses
-    | 'ROW_COUNT' parentheses
+    | 'ROW_COUNT' '(' ')'
     | 'TRUNCATE' '(' expr ',' expr ')'
     | 'WEEK' '(' expr (',' expr)? ')'
     | 'WEIGHT_STRING' '(' expr (
@@ -3124,7 +3118,7 @@ castType
     | 'DECIMAL' floatOptions?
     | 'JSON'
     | realType
-    | 'FLOAT' standardFloatOptions?
+    | 'FLOAT' (precision)?
     | 'POINT'
     | 'LINESTRING'
     | 'POLYGON'
@@ -3333,7 +3327,7 @@ handlerCondition
     ;
 
 cursorDeclaration
-    : 'DECLARE' identifier 'CURSOR' 'FOR' selectStatement
+    : 'DECLARE' identifier 'CURSOR' 'FOR' select
     ;
 
 iterateStatement
@@ -3423,7 +3417,7 @@ schedule
     ;
 
 columnDefinition
-    : columnName fieldDefinition checkOrReferences?
+    : identifier fieldDefinition checkOrReferences?
     ;
 
 checkOrReferences
@@ -3441,11 +3435,11 @@ constraintEnforcement
 
 tableConstraintDef
     : ('KEY' | 'INDEX') indexNameAndType? keyListWithExpression indexOption*
-    | 'FULLTEXT' keyOrIndex? indexName? keyListWithExpression fulltextIndexOption*
-    | 'SPATIAL' keyOrIndex? indexName? keyListWithExpression (commonIndexOption)*
+    | 'FULLTEXT' keyOrIndex? (identifier)? keyListWithExpression fulltextIndexOption*
+    | 'SPATIAL' keyOrIndex? (identifier)? keyListWithExpression (commonIndexOption)*
     | constraintName? (
         ('PRIMARY' 'KEY' | 'UNIQUE' keyOrIndex?) indexNameAndType? keyListWithExpression indexOption*
-        | 'FOREIGN' 'KEY' indexName? keyList references
+        | 'FOREIGN' 'KEY' (identifier)? keyList references
         | checkConstraint constraintEnforcement?
     )
     ;
@@ -3467,10 +3461,7 @@ fieldDefinition
 columnAttribute
     : 'NOT'? null
     | 'NOT' 'SECONDARY'
-    | 'DEFAULT' (
-        nowOrSignedLiteral
-        | exprWithParentheses
-    )
+    | 'DEFAULT' ( nowOrSignedLiteral | exprWithParentheses )
     | 'ON' 'UPDATE' 'NOW' timeFunctionParameters?
     | 'AUTO_INCREMENT'
     | 'SERIAL' 'DEFAULT' 'VALUE'
@@ -3501,7 +3492,7 @@ storageMedia
     ;
 
 now
-    : 'NOW' functionDatetimePrecision
+    : 'NOW' ( '(' INT_NUMBER? ')' )?
     ;
 
 nowOrSignedLiteral
@@ -3690,12 +3681,6 @@ typeDatetimePrecision
     : '(' INT_NUMBER ')'
     ;
 
-functionDatetimePrecision
-    :
-    | parentheses
-    | '(' INT_NUMBER ')'
-    ;
-
 charsetName
     : textOrIdentifier
     | 'BINARY'
@@ -3724,7 +3709,7 @@ createPartitioningEtc
 
 createTableOption
     : // In the order as they appear in the server grammar.
-    'ENGINE' '='? engineRef
+    'ENGINE' '='? textOrIdentifier
     | 'SECONDARY_ENGINE' equal? (
         'NULL'
         | textOrIdentifier
@@ -3843,7 +3828,7 @@ partitionValuesIn
 
 partitionOption
     : 'TABLESPACE' '='? identifier
-    | 'STORAGE'? 'ENGINE' '='? engineRef
+    | 'STORAGE'? 'ENGINE' '='? textOrIdentifier
     | 'NODEGROUP' '='? real_ulong_number
     | ('MAX_ROWS' | 'MIN_ROWS') '='? real_ulong_number
     | ('DATA' | 'INDEX') 'DIRECTORY' '='? textLiteral
@@ -3908,7 +3893,7 @@ typeWithOptCollate
     ;
 
 schemaIdentifierPair
-    : '(' schemaRef ',' schemaRef ')'
+    : '(' identifier ',' identifier ')'
     ;
 
 viewRefList
@@ -3920,7 +3905,7 @@ updateList
     ;
 
 updateElement
-    : columnRef '=' (expr | 'DEFAULT')
+    : fieldIdentifier '=' (expr | 'DEFAULT')
     ;
 
 charsetClause
@@ -4034,7 +4019,7 @@ userIdentifierOrText
 
 user
     : userIdentifierOrText
-    | 'CURRENT_USER' parentheses?
+    | 'CURRENT_USER' ('(' ')')?
     ;
 
 likeClause
@@ -4044,7 +4029,7 @@ likeClause
 likeOrWhere
     : // opt_wild_or_where in sql_yacc.yy
     likeClause
-    | whereClause
+    | where
     ;
 
 onlineOption
@@ -4075,73 +4060,19 @@ fieldIdentifier
     | qualifiedIdentifier dotIdentifier?
     ;
 
-columnName
-    : identifier
-    ;
-
 // A reference to a column of the object we are working on.
-columnInternalRef
-    : identifier
-    ;
-
-columnInternalRefList
+columns
     : // column_list (+ parentheses) + opt_derived_column_list in sql_yacc.yy
-    '(' columnInternalRef (',' columnInternalRef)* ')'
-    ;
-
-columnRef
-    : // A field identifier that can reference any schema/table.
-    fieldIdentifier
+    '(' identifier (',' identifier)* ')'
     ;
 
 insertIdentifier
-    : columnRef
+    : fieldIdentifier
     | tableWild
-    ;
-
-indexName
-    : identifier
-    ;
-
-indexRef
-    : // Always internal reference. Still all qualification variations are accepted.
-    fieldIdentifier
     ;
 
 tableWild
     : identifier '.' (identifier '.')? '*'
-    ;
-
-schemaName
-    : identifier
-    ;
-
-schemaRef
-    : identifier
-    ;
-
-procedureName
-    : qualifiedIdentifier
-    ;
-
-procedureRef
-    : qualifiedIdentifier
-    ;
-
-functionName
-    : qualifiedIdentifier
-    ;
-
-functionRef
-    : qualifiedIdentifier
-    ;
-
-triggerName
-    : qualifiedIdentifier
-    ;
-
-triggerRef
-    : qualifiedIdentifier
     ;
 
 viewName
@@ -4154,45 +4085,9 @@ viewRef
     | dotIdentifier
     ;
 
-tablespaceName
-    : identifier
-    ;
-
-tablespaceRef
-    : identifier
-    ;
-
-logfileGroupName
-    : identifier
-    ;
-
-logfileGroupRef
-    : identifier
-    ;
-
-eventName
-    : qualifiedIdentifier
-    ;
-
-eventRef
-    : qualifiedIdentifier
-    ;
-
 udfName
     : // UDFs are referenced at the same places as any other function. So, no dedicated *_ref here.
     identifier
-    ;
-
-serverName
-    : textOrIdentifier
-    ;
-
-serverRef
-    : textOrIdentifier
-    ;
-
-engineRef
-    : textOrIdentifier
     ;
 
 tableName
@@ -4202,7 +4097,7 @@ tableName
 
 filterTableRef
     : // Always qualified.
-    schemaRef dotIdentifier
+    identifier dotIdentifier
     ;
 
 tableRefWithWildcard
@@ -4383,10 +4278,6 @@ floatOptions
     | precision
     ;
 
-standardFloatOptions
-    : precision
-    ;
-
 precision
     : '(' INT_NUMBER ',' INT_NUMBER ')'
     ;
@@ -4409,10 +4300,6 @@ roleIdentifierOrText
 sizeNumber
     : real_ulong_number
     | pureIdentifier // Something like 10G. Semantic check needed for validity.
-    ;
-
-parentheses
-    : '(' ')'
     ;
 
 equal
