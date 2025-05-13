@@ -65,7 +65,10 @@ statement
     // Database administration
     | accountManagementStatement
     | tableAdministrationStatement
-    | uninstallStatement
+    | 'UNINSTALL' (
+        'PLUGIN' name
+        | 'COMPONENT' string (',' string)*
+    )
     | installStatement
     | setStatement // SET PASSWORD is handled in accountManagementStatement.
     | showDatabasesStatement
@@ -76,24 +79,24 @@ statement
     | showOpenTablesStatement
     | showParseTreeStatement
     | showPluginsStatement
-    | showEngineLogsStatement
-    | showEngineMutexStatement
-    | showEngineStatusStatement
-    | showColumnsStatement
-    | showBinaryLogsStatement
-    | showBinaryLogStatusStatement
-    | showReplicasStatement
-    | showBinlogEventsStatement
-    | showRelaylogEventsStatement
-    | showKeysStatement
-    | showEnginesStatement
-    | showCountWarningsStatement
-    | showCountErrorsStatement
-    | showWarningsStatement
-    | showErrorsStatement
-    | showProfilesStatement
-    | showProfileStatement
-    | showStatusStatement
+    | 'SHOW' 'ENGINE' engineOrAll 'LOGS'
+    | 'SHOW' 'ENGINE' engineOrAll 'MUTEX'
+    | 'SHOW' 'ENGINE' engineOrAll 'STATUS'
+    | 'SHOW' showCommandType? 'COLUMNS' ('FROM' | 'IN') qname inDb? likeOrWhere?
+    | 'SHOW' ('BINARY' | 'MASTER') 'LOGS'
+    | 'SHOW' 'BINARY' 'LOG' 'STATUS'
+    | 'SHOW' (replica 'HOSTS' | 'REPLICAS')
+    | 'SHOW' 'BINLOG' 'EVENTS' ('IN' string)? ( 'FROM' number )? limit? channel?
+    | 'SHOW' 'RELAYLOG' 'EVENTS' ('IN' string)? ( 'FROM' number )? limit? channel?
+    | 'SHOW' 'EXTENDED'? ('INDEX' | 'INDEXES' | 'KEYS') fromOrIn qname inDb? where?
+    | 'SHOW' 'STORAGE'? 'ENGINES'
+    | 'SHOW' 'COUNT' '(' '*' ')' 'WARNINGS'
+    | 'SHOW' 'COUNT' '(' '*' ')' 'ERRORS'
+    | 'SHOW' 'WARNINGS' limit?
+    | 'SHOW' 'ERRORS' limit?
+    | 'SHOW' 'PROFILES'
+    | 'SHOW' 'PROFILE' profileDefinitions? ( 'FOR' 'QUERY' INT_NUMBER )? limit?
+    | 'SHOW' scope? 'STATUS' likeOrWhere?
     | showProcessListStatement
     | showVariablesStatement
     | showCharacterSetStatement
@@ -121,30 +124,27 @@ statement
     | utilityStatement
     | getDiagnosticsStatement
     | signalStatement
-    | resignalStatement
     ;
 
-//----------------- DDL statements -------------------------------------------------------------------------------------
-
 alterStatement
-    : 'ALTER' (
-        alterTable
+    : 'ALTER'
+        ( onlineOption? 'TABLE' qname alterTableActions?
         | alterDatabase
-        | 'PROCEDURE' qualifiedIdentifier (routineCreateOption+)?
-        | 'FUNCTION' qualifiedIdentifier (routineCreateOption+)?
+        | 'PROCEDURE' qname (routineCreateOption+)?
+        | 'FUNCTION' qname (routineCreateOption+)?
         | alterView
         | alterEvent
         | alterTablespace
         | alterUndoTablespace
         | alterLogfileGroup
-        | alterServer
+        | 'SERVER' name serverOptions
         // ALTER USER is part of the user management rule.
         | alterInstanceStatement
     )
     ;
 
 alterDatabase
-    : 'DATABASE' identifier alterDatabaseOption+
+    : 'DATABASE' name alterDatabaseOption+
     ;
 
 alterDatabaseOption
@@ -153,34 +153,24 @@ alterDatabaseOption
     ;
 
 alterEvent
-    : definerClause? 'EVENT' qualifiedIdentifier ('ON' 'SCHEDULE' schedule)? (
+    : definerClause? 'EVENT' qname ('ON' 'SCHEDULE' schedule)? (
         'ON' 'COMPLETION' 'NOT'? 'PRESERVE'
-    )? ('RENAME' 'TO' identifier)? (
+    )? ('RENAME' 'TO' name)? (
         'ENABLE'
         | 'DISABLE' ('ON' replica)?
     )? ('COMMENT' textLiteral)? ('DO' compoundStatement)?
     ;
 
 alterLogfileGroup
-    : 'LOGFILE' 'GROUP' identifier 'ADD' 'UNDOFILE' textLiteral alterLogfileGroupOptions?
+    : 'LOGFILE' 'GROUP' name 'ADD' 'UNDOFILE' textLiteral alterLogfileGroupOptions?
     ;
 
 alterLogfileGroupOptions
-    : alterLogfileGroupOption (','? alterLogfileGroupOption)*
-    ;
-
-alterLogfileGroupOption
-    : tsOptionInitialSize
+    : (initialSize
     | tsOptionEngine
-    | tsOptionWait
-    ;
-
-alterServer
-    : 'SERVER' textOrIdentifier serverOptions
-    ;
-
-alterTable
-    : onlineOption? 'TABLE' tableRef alterTableActions?
+    | tsOptionWait) (','? (initialSize
+    | tsOptionEngine
+    | tsOptionWait))*
     ;
 
 alterTableActions
@@ -210,9 +200,9 @@ standaloneAlterCommands
 alterPartition
     : 'ADD' 'PARTITION' noWriteToBinLog? (
         partitionDefinitions
-        | 'PARTITIONS' real_ulong_number
+        | 'PARTITIONS' integer
     )
-    | 'DROP' 'PARTITION' identifierList
+    | 'DROP' 'PARTITION' name (',' name)*
     | 'REBUILD' 'PARTITION' noWriteToBinLog? allOrPartitionNameList
 
     // yes, twice "no write to bin log".
@@ -220,10 +210,10 @@ alterPartition
     | 'ANALYZE' 'PARTITION' noWriteToBinLog? allOrPartitionNameList
     | 'CHECK' 'PARTITION' allOrPartitionNameList checkOption*
     | 'REPAIR' 'PARTITION' noWriteToBinLog? allOrPartitionNameList repairType*
-    | 'COALESCE' 'PARTITION' noWriteToBinLog? real_ulong_number
+    | 'COALESCE' 'PARTITION' noWriteToBinLog? integer
     | 'TRUNCATE' 'PARTITION' allOrPartitionNameList
-    | 'REORGANIZE' 'PARTITION' noWriteToBinLog? ( identifierList 'INTO' partitionDefinitions )?
-    | 'EXCHANGE' 'PARTITION' identifier 'WITH' 'TABLE' tableRef withValidation?
+    | 'REORGANIZE' 'PARTITION' noWriteToBinLog? ( name (',' name)* 'INTO' partitionDefinitions )?
+    | 'EXCHANGE' 'PARTITION' name 'WITH' 'TABLE' qname withValidation?
     | 'DISCARD' 'PARTITION' allOrPartitionNameList 'TABLESPACE'
     | 'IMPORT' 'PARTITION' allOrPartitionNameList 'TABLESPACE'
     ;
@@ -246,46 +236,46 @@ alterCommandsModifier
 
 alterListItem
     : 'ADD' 'COLUMN'? (
-        identifier fieldDefinition checkOrReferences? place?
+        name fieldDefinition checkOrReferences? place?
         | '(' tableElementList ')'
     )
     | 'ADD' tableConstraintDef
-    | 'CHANGE' 'COLUMN'? identifier identifier fieldDefinition place?
-    | 'MODIFY' 'COLUMN'? identifier fieldDefinition place?
+    | 'CHANGE' 'COLUMN'? name name fieldDefinition place?
+    | 'MODIFY' 'COLUMN'? name fieldDefinition place?
     | 'DROP' (
-        'COLUMN'? identifier restrict?
-        | 'FOREIGN' 'KEY' identifier
+        'COLUMN'? name restrict?
+        | 'FOREIGN' 'KEY' name
         | 'PRIMARY' 'KEY'
-        | keyOrIndex fieldIdentifier
-        | 'CHECK' identifier
-        | 'CONSTRAINT' identifier
+        | keyOrIndex qname
+        | 'CHECK' name
+        | 'CONSTRAINT' name
     )
     | 'DISABLE' 'KEYS'
     | 'ENABLE' 'KEYS'
-    | 'ALTER' 'COLUMN'? identifier (
+    | 'ALTER' 'COLUMN'? name (
         'SET' 'DEFAULT' (
-            exprWithParentheses
-            | signedLiteralOrNull
+            '(' expr ')'
+            | signedLiteral
         )
         | 'DROP' 'DEFAULT'
         | 'SET' visibility
     )
-    | 'ALTER' 'INDEX' fieldIdentifier visibility
-    | 'ALTER' 'CHECK' identifier constraintEnforcement
-    | 'ALTER' 'CONSTRAINT' identifier constraintEnforcement
-    | 'RENAME' 'COLUMN' identifier 'TO' identifier
-    | 'RENAME' ('TO' | 'AS')? tableName
-    | 'RENAME' keyOrIndex fieldIdentifier 'TO' identifier
+    | 'ALTER' 'INDEX' qname visibility
+    | 'ALTER' 'CHECK' name constraintEnforcement
+    | 'ALTER' 'CONSTRAINT' name constraintEnforcement
+    | 'RENAME' 'COLUMN' name 'TO' name
+    | 'RENAME' ('TO' | 'AS')? qname
+    | 'RENAME' keyOrIndex qname 'TO' name
     | 'CONVERT' 'TO' charset (
         'DEFAULT'
-        | charsetName
+        | name
     ) collate?
     | 'FORCE'
     | 'ORDER' 'BY' alterOrderList
     ;
 
 place
-    : 'AFTER' identifier
+    : 'AFTER' name
     | 'FIRST'
     ;
 
@@ -295,15 +285,15 @@ restrict
     ;
 
 alterOrderList
-    : identifier direction? (',' identifier direction?)*
+    : name direction? (',' name direction?)*
     ;
 
 alterAlgorithmOption
-    : 'ALGORITHM' '='? ('DEFAULT' | identifier)
+    : 'ALGORITHM' '='? ('DEFAULT' | name)
     ;
 
 alterLockOption
-    : 'LOCK' '='? ('DEFAULT' | identifier)
+    : 'LOCK' '='? ('DEFAULT' | name)
     ;
 
 indexLockAndAlgorithm
@@ -321,19 +311,19 @@ removePartitioning
 
 allOrPartitionNameList
     : 'ALL'
-    | identifierList
+    | name (',' name)*
     ;
 
 alterTablespace
-    : 'TABLESPACE' identifier (
+    : 'TABLESPACE' name (
         ('ADD' | 'DROP') 'DATAFILE' textLiteral alterTablespaceOptions?
-        | 'RENAME' 'TO' identifier
+        | 'RENAME' 'TO' name
         | alterTablespaceOptions
     )
     ;
 
 alterUndoTablespace
-    : 'UNDO' 'TABLESPACE' identifier 'SET' (
+    : 'UNDO' 'TABLESPACE' name 'SET' (
         'ACTIVE'
         | 'INACTIVE'
     ) undoTableSpaceOptions?
@@ -348,7 +338,7 @@ alterTablespaceOptions
     ;
 
 alterTablespaceOption
-    : 'INITIAL_SIZE' '='? sizeNumber
+    : initialSize
     | tsOptionAutoextendSize
     | tsOptionMaxSize
     | tsOptionEngine
@@ -357,14 +347,8 @@ alterTablespaceOption
     | tsOptionEngineAttribute
     ;
 
-//changeTablespaceOption
-//    : 'INITIAL_SIZE' '='? sizeNumber
-//    | tsOptionAutoextendSize
-//    | tsOptionMaxSize
-//    ;
-
 alterView
-    : viewAlgorithm? definerClause? viewSuid? 'VIEW' viewRef viewTail
+    : viewAlgorithm? definerClause? viewSuid? 'VIEW' qname viewTail
     ;
 
 // This is not the full view_tail from sql_yacc.yy as we have either a view name or a view reference,
@@ -382,26 +366,21 @@ viewCheckOption
     ;
 
 alterInstanceStatement
-    : 'INSTANCE' 'ROTATE' textOrIdentifier 'MASTER' 'KEY'
-    | (
-        'RELOAD' 'TLS' (
-            'NO' 'ROLLBACK' 'ON' 'ERROR'
-            | 'FOR' 'CHANNEL' identifier (
-                'NO' 'ROLLBACK' 'ON' 'ERROR'
-            )?
+    : 'INSTANCE' 'ROTATE' name 'MASTER' 'KEY'
+    | 'RELOAD' 'TLS'
+        ( 'NO' 'ROLLBACK' 'ON' 'ERROR'
+        | 'FOR' 'CHANNEL' name ( 'NO' 'ROLLBACK' 'ON' 'ERROR' )?
         )
-        | ('ENABLE' | 'DISABLE') identifier identifier
-        | 'RELOAD' 'KEYRING'
-    )
+    | ('ENABLE' | 'DISABLE') name name
+    | 'RELOAD' 'KEYRING'
+
     ;
 
-//----------------------------------------------------------------------------------------------------------------------
-
 createStatement
-    : 'CREATE' (
-        createDatabase
-        | createTable
-        | createFunction
+    : 'CREATE'
+        ( 'DATABASE' ifNotExists? name createDatabaseOption*
+        | 'TEMPORARY'? 'TABLE' ifNotExists? qname ( ('(' tableElementList ')')? createTableOptionsEtc? | 'LIKE' qname | '(' 'LIKE' qname ')' )
+        | definerClause? 'FUNCTION' ifNotExists? qname '(' ( functionParameter (',' functionParameter)* )? ')' 'RETURNS' typeWithOptCollate routineCreateOption* storedRoutineBody
         | createProcedure
         | createUdf
         | createLogfileGroup
@@ -414,25 +393,13 @@ createStatement
         | createRole
         | createSpatialReference
         | createUndoTablespace
-    )
-    ;
-
-createDatabase
-    : 'DATABASE' ifNotExists? identifier createDatabaseOption*
+        )
     ;
 
 createDatabaseOption
     : defaultCharset
     | defaultCollation
     | defaultEncryption
-    ;
-
-createTable
-    : 'TEMPORARY'? 'TABLE' ifNotExists? tableName (
-        ('(' tableElementList ')')? createTableOptionsEtc?
-        | 'LIKE' tableRef
-        | '(' 'LIKE' tableRef ')'
-    )
     ;
 
 tableElementList
@@ -445,52 +412,24 @@ tableElement
     ;
 
 duplicateAsQe
-    : ('REPLACE' | 'IGNORE')? asCreateQueryExpression
+    : ('REPLACE' | 'IGNORE')? 'AS'? select
     ;
-
-asCreateQueryExpression
-    : 'AS'? select
-    ;
-
-//queryExpressionOrParens
-//    : queryExpression lockingClauseList?
-//    | queryExpressionParens
-//    ;
-
-//createRoutine
-//    : // Rule for external use only.
-//    'CREATE' (createProcedure | createFunction | createUdf) ';'? EOF
-//    ;
 
 createProcedure
-    : definerClause? 'PROCEDURE' ifNotExists? qualifiedIdentifier '(' (
-        procedureParameter (',' procedureParameter)*
-    )? ')' routineCreateOption* storedRoutineBody
-    ;
-
-routineString
-    : textStringLiteral
-    | DOLLAR_QUOTED_STRING_TEXT
+    : definerClause? 'PROCEDURE' ifNotExists? qname
+      '(' ( procedureParameter (',' procedureParameter)* )? ')'
+      routineCreateOption* storedRoutineBody
     ;
 
 storedRoutineBody
     : compoundStatement
-    | 'AS' routineString
-    ;
-
-createFunction
-    : definerClause? 'FUNCTION' ifNotExists? qualifiedIdentifier '(' (
-        functionParameter (',' functionParameter)*
-    )? ')' 'RETURNS' typeWithOptCollate routineCreateOption* storedRoutineBody
+    | 'AS' (STRING | DOLLAR_QUOTED_STRING_TEXT)
     ;
 
 createUdf
-    : 'AGGREGATE'? 'FUNCTION' ifNotExists? udfName 'RETURNS' (
-        'STRING'
-        | 'INT'
-        | 'REAL'
-        | 'DECIMAL'
-    ) 'SONAME' textLiteral
+    : 'AGGREGATE'? 'FUNCTION' ifNotExists? name 'RETURNS'
+    ( 'STRING' | 'INT' | 'REAL' | 'DECIMAL' )
+    'SONAME' textLiteral
     ;
 
 // sp_c_chistic in the server grammar.
@@ -501,7 +440,7 @@ routineCreateOption
 
 routineOption
     : 'COMMENT' textLiteral
-    | 'LANGUAGE' ( 'SQL' | identifier )
+    | 'LANGUAGE' ( 'SQL' | name )
     | 'NO' 'SQL'
     | 'CONTAINS' 'SQL'
     | 'READS' 'SQL' 'DATA'
@@ -511,24 +450,24 @@ routineOption
 
 createIndex
     : onlineOption? (
-        'UNIQUE'? 'INDEX' identifier indexTypeClause? createIndexTarget indexOption*
-        | 'FULLTEXT' 'INDEX' identifier createIndexTarget fulltextIndexOption*
-        | 'SPATIAL' 'INDEX' identifier createIndexTarget (commonIndexOption)*
+        'UNIQUE'? 'INDEX' name indexTypeClause? createIndexTarget indexOption*
+        | 'FULLTEXT' 'INDEX' name createIndexTarget fulltextIndexOption*
+        | 'SPATIAL' 'INDEX' name createIndexTarget (commonIndexOption)*
     ) indexLockAndAlgorithm?
     ;
 
 indexNameAndType
-    : identifier
-    | (identifier)? 'USING' indexType
-    | identifier 'TYPE' indexType
+    : name
+    | (name)? 'USING' indexType
+    | name 'TYPE' indexType
     ;
 
 createIndexTarget
-    : 'ON' tableRef keyListWithExpression
+    : 'ON' qname keyListWithExpression
     ;
 
 createLogfileGroup
-    : 'LOGFILE' 'GROUP' identifier 'ADD' 'UNDOFILE' textLiteral logfileGroupOptions?
+    : 'LOGFILE' 'GROUP' name 'ADD' 'UNDOFILE' textLiteral logfileGroupOptions?
     ;
 
 logfileGroupOptions
@@ -536,7 +475,7 @@ logfileGroupOptions
     ;
 
 logfileGroupOption
-    : tsOptionInitialSize
+    : initialSize
     | tsOptionUndoRedoBufferSize
     | tsOptionNodegroup
     | tsOptionEngine
@@ -545,7 +484,7 @@ logfileGroupOption
     ;
 
 createServer
-    : 'SERVER' textOrIdentifier 'FOREIGN' 'DATA' 'WRAPPER' textOrIdentifier serverOptions
+    : 'SERVER' name 'FOREIGN' 'DATA' 'WRAPPER' name serverOptions
     ;
 
 serverOptions
@@ -560,17 +499,15 @@ serverOption
     | 'PASSWORD' textLiteral
     | 'SOCKET' textLiteral
     | 'OWNER' textLiteral
-    | 'PORT' ulong_number
+    | 'PORT' number
     ;
 
 createTablespace
-    : 'TABLESPACE' identifier tsDataFileName? (
-        'USE' 'LOGFILE' 'GROUP' identifier
-    )? tablespaceOptions?
+    : 'TABLESPACE' name tsDataFileName? ( 'USE' 'LOGFILE' 'GROUP' name )? tablespaceOptions?
     ;
 
 createUndoTablespace
-    : 'UNDO' 'TABLESPACE' identifier 'ADD' tsDataFile undoTableSpaceOptions?
+    : 'UNDO' 'TABLESPACE' name 'ADD' tsDataFile undoTableSpaceOptions?
     ;
 
 tsDataFileName
@@ -586,7 +523,7 @@ tablespaceOptions
     ;
 
 tablespaceOption
-    : tsOptionInitialSize
+    : initialSize
     | tsOptionAutoextendSize
     | tsOptionMaxSize
     | tsOptionExtentSize
@@ -598,7 +535,7 @@ tablespaceOption
     | tsOptionEncryption
     ;
 
-tsOptionInitialSize
+initialSize
     : 'INITIAL_SIZE' '='? sizeNumber
     ;
 
@@ -619,15 +556,15 @@ tsOptionExtentSize
     ;
 
 tsOptionNodegroup
-    : 'NODEGROUP' '='? real_ulong_number
+    : 'NODEGROUP' '='? integer
     ;
 
 tsOptionEngine
-    : 'STORAGE'? 'ENGINE' '='? textOrIdentifier
+    : 'STORAGE'? 'ENGINE' '='? name
     ;
 
 tsOptionWait
-    : ('WAIT' | 'NO_WAIT')
+    : 'WAIT' | 'NO_WAIT'
     ;
 
 tsOptionComment
@@ -639,15 +576,15 @@ tsOptionFileblockSize
     ;
 
 tsOptionEncryption
-    : 'ENCRYPTION' '='? textStringLiteral
+    : 'ENCRYPTION' '='? string
     ;
 
 tsOptionEngineAttribute
-    : 'ENGINE' '='? textStringLiteral
+    : 'ENGINE' '='? string
     ;
 
 createView
-    : viewReplaceOrAlgorithm? definerClause? viewSuid? 'VIEW' viewName viewTail
+    : viewReplaceOrAlgorithm? definerClause? viewSuid? 'VIEW' qname viewTail
     ;
 
 viewReplaceOrAlgorithm
@@ -656,11 +593,7 @@ viewReplaceOrAlgorithm
     ;
 
 viewAlgorithm
-    : 'ALGORITHM' '=' (
-        'UNDEFINED'
-        | 'MERGE'
-        | 'TEMPTABLE'
-    )
+    : 'ALGORITHM' '=' ( 'UNDEFINED' | 'MERGE' | 'TEMPTABLE' )
     ;
 
 viewSuid
@@ -668,23 +601,16 @@ viewSuid
     ;
 
 createTrigger
-    : definerClause? 'TRIGGER' ifNotExists? qualifiedIdentifier (
-        'BEFORE'
-        | 'AFTER'
-    ) ('INSERT' | 'UPDATE' | 'DELETE') 'ON' tableRef 'FOR' 'EACH' 'ROW'
-        triggerFollowsPrecedesClause? compoundStatement
-    ;
-
-triggerFollowsPrecedesClause
-    : ('FOLLOWS' | 'PRECEDES') textOrIdentifier // not a trigger reference!
+    : definerClause? 'TRIGGER' ifNotExists? qname ( 'BEFORE' | 'AFTER' )
+      ('INSERT' | 'UPDATE' | 'DELETE') 'ON' qname 'FOR' 'EACH' 'ROW'
+        ('FOLLOWS' | 'PRECEDES') name? compoundStatement
     ;
 
 createEvent
-    : definerClause? 'EVENT' ifNotExists? qualifiedIdentifier 'ON' 'SCHEDULE' schedule (
-        'ON' 'COMPLETION' 'NOT'? 'PRESERVE'
-    )? ('ENABLE' | 'DISABLE' ('ON' replica)?)? (
-        'COMMENT' textLiteral
-    )? 'DO' compoundStatement
+    : definerClause? 'EVENT' ifNotExists? qname 'ON' 'SCHEDULE' schedule
+      ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )?
+      ('ENABLE' | 'DISABLE' ('ON' replica)?)?
+      ( 'COMMENT' textLiteral )? 'DO' compoundStatement
     ;
 
 createRole
@@ -693,26 +619,26 @@ createRole
     ;
 
 createSpatialReference
-    : 'OR' 'REPLACE' 'SPATIAL' 'REFERENCE' 'SYSTEM' real_ulong_number srsAttribute*
-    | 'SPATIAL' 'REFERENCE' 'SYSTEM' ifNotExists? real_ulong_number srsAttribute*
+    : 'OR' 'REPLACE' 'SPATIAL' 'REFERENCE' 'SYSTEM' integer srsAttribute*
+    | 'SPATIAL' 'REFERENCE' 'SYSTEM' ifNotExists? integer srsAttribute*
     ;
 
 srsAttribute
-    : 'NAME' 'TEXT' textStringNoLinebreak
-    | 'DEFINITION' 'TEXT' textStringNoLinebreak
-    | 'ORGANIZATION' textStringNoLinebreak 'IDENTIFIED' 'BY' real_ulong_number
-    | 'DESCRIPTION' 'TEXT' textStringNoLinebreak
+    : 'NAME' 'TEXT' string
+    | 'DEFINITION' 'TEXT' string
+    | 'ORGANIZATION' string 'IDENTIFIED' 'BY' integer
+    | 'DESCRIPTION' 'TEXT' string
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
 
 dropStatement
-    : 'DROP' (
-        dropDatabase
-        | dropEvent
-        | dropFunction
-        | dropProcedure
-        | dropIndex
+    : 'DROP'
+        ( 'DATABASE' ifExists? name
+        | 'EVENT' ifExists? qname
+        | 'FUNCTION' ifExists? qname
+        | 'PROCEDURE' ifExists? qname
+        | onlineOption? 'INDEX' qname 'ON' qname indexLockAndAlgorithm?
         | dropLogfileGroup
         | dropServer
         | dropTable
@@ -725,28 +651,8 @@ dropStatement
     )
     ;
 
-dropDatabase
-    : 'DATABASE' ifExists? identifier
-    ;
-
-dropEvent
-    : 'EVENT' ifExists? qualifiedIdentifier
-    ;
-
-dropFunction
-    : 'FUNCTION' ifExists? qualifiedIdentifier // Including UDFs.
-    ;
-
-dropProcedure
-    : 'PROCEDURE' ifExists? qualifiedIdentifier
-    ;
-
-dropIndex
-    : onlineOption? 'INDEX' fieldIdentifier 'ON' tableRef indexLockAndAlgorithm?
-    ;
-
 dropLogfileGroup
-    : 'LOGFILE' 'GROUP' identifier (
+    : 'LOGFILE' 'GROUP' name (
         dropLogfileGroupOption (','? dropLogfileGroupOption)*
     )?
     ;
@@ -757,28 +663,28 @@ dropLogfileGroupOption
     ;
 
 dropServer
-    : 'SERVER' ifExists? textOrIdentifier
+    : 'SERVER' ifExists? name
     ;
 
 dropTable
-    : 'TEMPORARY'? ('TABLE' | 'TABLES') ifExists? tableRefList (
+    : 'TEMPORARY'? ('TABLE' | 'TABLES') ifExists? qnames (
         'RESTRICT'
         | 'CASCADE'
     )?
     ;
 
 dropTableSpace
-    : 'TABLESPACE' identifier (
+    : 'TABLESPACE' name (
         dropLogfileGroupOption (','? dropLogfileGroupOption)*
     )?
     ;
 
 dropTrigger
-    : 'TRIGGER' ifExists? qualifiedIdentifier
+    : 'TRIGGER' ifExists? qname
     ;
 
 dropView
-    : 'VIEW' ifExists? viewRefList ('RESTRICT' | 'CASCADE')?
+    : 'VIEW' ifExists? qname (',' qname)* ('RESTRICT' | 'CASCADE')?
     ;
 
 dropRole
@@ -786,11 +692,11 @@ dropRole
     ;
 
 dropSpatialReference
-    : 'SPATIAL' 'REFERENCE' 'SYSTEM' ifExists? real_ulong_number
+    : 'SPATIAL' 'REFERENCE' 'SYSTEM' ifExists? integer
     ;
 
 dropUndoTablespace
-    : 'UNDO' 'TABLESPACE' identifier undoTableSpaceOptions?
+    : 'UNDO' 'TABLESPACE' name undoTableSpaceOptions?
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -802,32 +708,32 @@ renameTableStatement
     ;
 
 renamePair
-    : tableRef 'TO' tableName
+    : qname 'TO' qname
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
 
 truncateTableStatement
-    : 'TRUNCATE' 'TABLE'? tableRef
+    : 'TRUNCATE' 'TABLE'? qname
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
 
 importStatement
-    : 'IMPORT' 'TABLE' 'FROM' textStringLiteralList
+    : 'IMPORT' 'TABLE' 'FROM' strings
     ;
 
 //--------------- DML statements ---------------------------------------------------------------------------------------
 
 callStatement
-    : 'CALL' qualifiedIdentifier ('(' exprList? ')')?
+    : 'CALL' qname ('(' (expr (',' expr)*)? ')')?
     ;
 
 deleteStatement
     : with? 'DELETE' deleteStatementOption* (
         'FROM' (
             tableAliasRefList 'USING' tableReferenceList where? // Multi table variant 1.
-            | tableRef (tableAlias)? partitionDelete? where? orderBy? simpleLimitClause?
+            | qname (tableAlias)? partitionDelete? where? orderBy? simpleLimitClause?
             // Single table delete.
         )
         | tableAliasRefList 'FROM' tableReferenceList where? // Multi table variant 2.
@@ -835,7 +741,7 @@ deleteStatement
     ;
 
 partitionDelete
-    : 'PARTITION' '(' identifierList ')'
+    : 'PARTITION' '(' name (',' name)* ')'
     ;
 
 deleteStatementOption
@@ -852,8 +758,8 @@ doStatement
 
 handlerStatement
     : 'HANDLER' (
-        tableRef 'OPEN' tableAlias?
-        | identifier (
+        qname 'OPEN' tableAlias?
+        | name (
             'CLOSE'
             | 'READ' handlerReadOrScan where? limit?
         )
@@ -862,7 +768,7 @@ handlerStatement
 
 handlerReadOrScan
     : ('FIRST' | 'NEXT') // Scan function.
-    | identifier (
+    | name (
         // The rkey part.
         ('FIRST' | 'NEXT' | 'PREV' | 'LAST')
         | (
@@ -878,7 +784,7 @@ handlerReadOrScan
 //----------------------------------------------------------------------------------------------------------------------
 
 insertStatement
-    : 'INSERT' insertLockOption? 'IGNORE'? 'INTO'? tableRef usePartition? (
+    : 'INSERT' insertLockOption? 'IGNORE'? 'INTO'? qname usePartition? (
         insertFromConstructor valuesReference?
         | 'SET' updateList valuesReference?
         | insertQueryExpression
@@ -920,7 +826,7 @@ values
     ;
 
 valuesReference
-    : 'AS' identifier columns?
+    : 'AS' name columns?
     ;
 
 insertUpdateList
@@ -930,10 +836,10 @@ insertUpdateList
 //----------------------------------------------------------------------------------------------------------------------
 
 loadStatement
-    : 'LOAD' dataOrXml loadDataLock? 'FROM'? 'LOCAL'? loadSourceType? textStringLiteral sourceCount? sourceOrder? (
+    : 'LOAD' dataOrXml loadDataLock? 'FROM'? 'LOCAL'? loadSourceType? string sourceCount? sourceOrder? (
         'REPLACE'
         | 'IGNORE'
-    )? 'INTO' 'TABLE' tableRef usePartition? charsetClause? xmlRowsIdentifiedBy? fieldsClause? linesClause?
+    )? 'INTO' 'TABLE' qname usePartition? (charset)? xmlRowsIdentifiedBy? fieldsClause? linesClause?
         loadDataFileTail loadParallel? loadMemory? loadAlgorithm?
     ;
 
@@ -955,7 +861,7 @@ loadSourceType
 sourceCount
     : (
         'COUNT' INT_NUMBER
-        | pureIdentifier INT_NUMBER
+        | IDENTIFIER INT_NUMBER
     )
     ;
 
@@ -964,28 +870,13 @@ sourceOrder
     ;
 
 xmlRowsIdentifiedBy
-    : 'ROWS' 'IDENTIFIED' 'BY' textString
+    : 'ROWS' 'IDENTIFIED' 'BY' string
     ;
 
 loadDataFileTail
-    : ('IGNORE' INT_NUMBER ('LINES' | 'ROWS'))? loadDataFileTargetList? (
-        'SET' updateList
-    )?
-    ;
-
-loadDataFileTargetList
-    : '(' fieldOrVariableList? ')'
-    ;
-
-fieldOrVariableList
-    : (fieldIdentifier | '@' textOrIdentifier | '@@') (
-        ',' (
-            fieldIdentifier
-            | '@' textOrIdentifier
-            | AT_TEXT_SUFFIX
-            | '@@'
-        )
-    )*
+    : ('IGNORE' INT_NUMBER ('LINES' | 'ROWS'))?
+      ('(' (name ( ',' name )*)? ')')?
+      ( 'SET' updateList )?
     ;
 
 loadAlgorithm
@@ -1003,7 +894,7 @@ loadMemory
 //----------------------------------------------------------------------------------------------------------------------
 
 replaceStatement
-    : 'REPLACE' ('LOW_PRIORITY' | 'DELAYED')? 'INTO'? tableRef usePartition? (
+    : 'REPLACE' ('LOW_PRIORITY' | 'DELAYED')? 'INTO'? qname usePartition? (
         insertFromConstructor
         | 'SET' updateList
         | insertQueryExpression
@@ -1069,7 +960,7 @@ selectCore
     : 'SELECT' unique? modifier* items intoClause? fromClause? where? groupByClause? havingClause? windowClause?
         qualifyClause?
     | 'VALUES' rowValueExplicit (',' rowValueExplicit)*
-    | 'TABLE' tableRef
+    | 'TABLE' qname
     | '(' select ')'
     ;
 
@@ -1108,18 +999,16 @@ limitOptions
     ;
 
 limitOption
-    : identifier
-    | PARAM_MARKER | INT_NUMBER
+    : name
+    | PARAM | INT_NUMBER
 //    | (PARAM_MARKER | ULONGLONG_NUMBER | LONG_NUMBER | INT_NUMBER)
     ;
 
 intoClause
     : 'INTO' (
-        'OUTFILE' textStringLiteral charsetClause? fieldsClause? linesClause?
-        | 'DUMPFILE' textStringLiteral
-        | (textOrIdentifier | userVariable) (
-            ',' (textOrIdentifier | userVariable)
-        )*
+        'OUTFILE' string (charset)? fieldsClause? linesClause?
+        | 'DUMPFILE' string
+        | name ( ',' name )*
     )
     ;
 
@@ -1140,7 +1029,7 @@ windowClause
     ;
 
 windowDefinition
-    : identifier 'AS' windowSpec
+    : name 'AS' windowSpec
     ;
 
 windowSpec
@@ -1148,7 +1037,7 @@ windowSpec
     ;
 
 windowSpecDetails
-    : identifier? ('PARTITION' 'BY' orderList)? orderBy? windowFrameClause?
+    : name? ('PARTITION' 'BY' orderExpression (',' orderExpression)*)? orderBy? windowFrameClause?
     ;
 
 windowFrameClause
@@ -1168,8 +1057,8 @@ windowFrameExtent
 
 windowFrameStart
     : 'UNBOUNDED' 'PRECEDING'
-    | ulonglongNumber 'PRECEDING'
-    | PARAM_MARKER 'PRECEDING'
+    | number 'PRECEDING'
+    | PARAM 'PRECEDING'
     | 'INTERVAL' expr interval 'PRECEDING'
     | 'CURRENT' 'ROW'
     ;
@@ -1181,8 +1070,8 @@ windowFrameBetween
 windowFrameBound
     : windowFrameStart
     | 'UNBOUNDED' 'FOLLOWING'
-    | ulonglongNumber 'FOLLOWING'
-    | PARAM_MARKER 'FOLLOWING'
+    | number 'FOLLOWING'
+    | PARAM 'FOLLOWING'
     | 'INTERVAL' expr interval 'FOLLOWING'
     ;
 
@@ -1200,16 +1089,16 @@ with
     ;
 
 cte
-    : identifier columns? 'AS' '(' select ')'
+    : name columns? 'AS' '(' select ')'
     ;
 
 groupByClause
-    : 'GROUP' 'BY' orderList ( 'WITH' 'ROLLUP' )?
-    | 'GROUP' 'BY' ( 'ROLLUP' | 'CUBE' ) '(' groupList ')'
+    : 'GROUP' 'BY' orderExpression (',' orderExpression)* ( 'WITH' 'ROLLUP' )?
+    | 'GROUP' 'BY' ( 'ROLLUP' | 'CUBE' ) '(' expr (',' expr)* ')'
     ;
 
 orderBy
-    : 'ORDER' 'BY' orderList
+    : 'ORDER' 'BY' orderExpression (',' orderExpression)*
     ;
 
 direction
@@ -1230,7 +1119,7 @@ tableReference
     // Note: we have also a tableRef rule for identifiers that reference a table anywhere.
     : ( tableFactor
       // ODBC syntax
-      | '{' ( identifier | 'OJ' ) tableFactor joinedTable* '}'
+      | '{' ( name | 'OJ' ) tableFactor joinedTable* '}'
       )
       joinedTable*
     ;
@@ -1252,11 +1141,11 @@ items
 
 item
     : tableWild
-    | expr selectAlias?
+    | expr alias?
     ;
 
-selectAlias
-    : 'AS'? (identifier | textStringLiteral)
+alias
+    : 'AS'? name
     ;
 
 where
@@ -1268,11 +1157,11 @@ joinedTable
     :
     innerJoinType tableReference (
         'ON' expr
-        | 'USING' identifierListWithParentheses
+        | 'USING' '(' name (',' name)* ')'
     )?
     | outerJoinType tableReference (
         'ON' expr
-        | 'USING' identifierListWithParentheses
+        | 'USING' '(' name (',' name)* ')'
     )
     | naturalJoinType tableFactor
     ;
@@ -1300,7 +1189,7 @@ tableFactor
     ;
 
 singleTable
-    : tableRef usePartition? tableAlias? indexHintList? tablesampleClause?
+    : qname usePartition? tableAlias? indexHintList? tablesampleClause?
     ;
 
 singleTableParens
@@ -1319,7 +1208,7 @@ tableReferenceListParens
     ;
 
 tableFunction
-    : 'JSON_TABLE' '(' expr ',' textStringLiteral columnsClause ')' tableAlias?
+    : 'JSON_TABLE' '(' expr ',' string columnsClause ')' tableAlias?
     ;
 
 columnsClause
@@ -1327,10 +1216,10 @@ columnsClause
     ;
 
 jtColumn
-    : identifier 'FOR' 'ORDINALITY'
-    | identifier dataType (collate)? 'EXISTS'? 'PATH' textStringLiteral
+    : name 'FOR' 'ORDINALITY'
+    | name dataType (collate)? 'EXISTS'? 'PATH' string
         onEmptyOrErrorJsonTable?
-    | 'NESTED' 'PATH' textStringLiteral columnsClause
+    | 'NESTED' 'PATH' string columnsClause
     ;
 
 onEmptyOrError
@@ -1355,7 +1244,7 @@ onError
 jsonOnResponse
     : 'ERROR'
     | 'NULL'
-    | 'DEFAULT' textStringLiteral
+    | 'DEFAULT' string
     ;
 
 unionOption
@@ -1364,7 +1253,7 @@ unionOption
     ;
 
 tableAlias
-    : ('AS' | '=')? identifier
+    : ('AS' | '=')? name
     ;
 
 indexHintList
@@ -1400,7 +1289,7 @@ indexList
     ;
 
 indexListElement
-    : identifier
+    : name
     | 'PRIMARY'
     ;
 
@@ -1439,12 +1328,12 @@ startTransactionOptionList
     ;
 
 savepointStatement
-    : 'SAVEPOINT' identifier
+    : 'SAVEPOINT' name
     | 'ROLLBACK' 'WORK'? (
-        'TO' 'SAVEPOINT'? identifier
+        'TO' 'SAVEPOINT'? name
         | ('AND' 'NO'? 'CHAIN')? ('NO'? 'RELEASE')?
     )
-    | 'RELEASE' 'SAVEPOINT' identifier
+    | 'RELEASE' 'SAVEPOINT' name
     ;
 
 lockStatement
@@ -1454,7 +1343,7 @@ lockStatement
     ;
 
 lockItem
-    : tableRef tableAlias? lockOption
+    : qname tableAlias? lockOption
     ;
 
 lockOption
@@ -1478,16 +1367,16 @@ xaConvert
     ;
 
 xid
-    : textString (',' textString (',' ulong_number)?)?
+    : string (',' string (',' number)?)?
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
 
 replicationStatement
-    : 'PURGE' purgeOptions
-    | changeSource
+    : 'PURGE' ('BINARY' | 'MASTER') 'LOGS' ( 'TO' textLiteral | 'BEFORE' expr )
+    | 'CHANGE' ('MASTER' | 'REPLICATION' 'SOURCE') 'TO' sourceDefinitions channel?
     | 'RESET' resetOption (',' resetOption)*
-    | 'RESET' 'PERSIST' ifExistsIdentifier?
+    | 'RESET' 'PERSIST' (ifExists 'DEFAULT'? qname)?
     | startReplicaStatement
     | stopReplicaStatement
     | changeReplication
@@ -1495,38 +1384,13 @@ replicationStatement
     | groupReplication
     ;
 
-purgeOptions
-    : ('BINARY' | 'MASTER') 'LOGS' (
-        'TO' textLiteral
-        | 'BEFORE' expr
-    )
-    ;
-
 resetOption
-    : masterOrBinaryLogsAndGtids sourceResetOptions?
+    : ('MASTER' | 'BINARY' 'LOGS' 'AND' 'GTIDS') ('TO' integer)?
     | replica 'ALL'? channel?
     ;
 
-masterOrBinaryLogsAndGtids
-    : 'MASTER'
-    | 'BINARY' 'LOGS' 'AND' 'GTIDS'
-    ;
-
-sourceResetOptions
-    : 'TO' real_ulong_number
-    ;
-
 replicationLoad
-    : 'LOAD' ('DATA' | 'TABLE' tableRef) 'FROM' 'MASTER'
-    ;
-
-changeReplicationSource
-    : 'MASTER'
-    | 'REPLICATION' 'SOURCE'
-    ;
-
-changeSource
-    : 'CHANGE' changeReplicationSource 'TO' sourceDefinitions channel?
+    : 'LOAD' ('DATA' | 'TABLE' qname) 'FROM' 'MASTER'
     ;
 
 sourceDefinitions
@@ -1535,40 +1399,40 @@ sourceDefinitions
 
 sourceDefinition
     : // source_def in sql_yacc.yy
-    changeReplicationSourceHost '=' textStringNoLinebreak
-    | 'NETWORK_NAMESPACE' '=' textStringNoLinebreak
-    | changeReplicationSourceBind '=' textStringNoLinebreak
-    | changeReplicationSourceUser '=' textStringNoLinebreak
-    | changeReplicationSourcePassword '=' textStringNoLinebreak
-    | changeReplicationSourcePort '=' ulong_number
-    | changeReplicationSourceConnectRetry '=' ulong_number
-    | changeReplicationSourceRetryCount '=' ulong_number
-    | changeReplicationSourceDelay '=' ulong_number
-    | changeReplicationSourceSSL '=' ulong_number
-    | changeReplicationSourceSSLCA '=' textStringNoLinebreak
-    | changeReplicationSourceSSLCApath '=' textStringNoLinebreak
-    | changeReplicationSourceTLSVersion '=' textStringNoLinebreak
-    | changeReplicationSourceSSLCert '=' textStringNoLinebreak
+    changeReplicationSourceHost '=' string
+    | 'NETWORK_NAMESPACE' '=' string
+    | changeReplicationSourceBind '=' string
+    | changeReplicationSourceUser '=' string
+    | changeReplicationSourcePassword '=' string
+    | changeReplicationSourcePort '=' number
+    | changeReplicationSourceConnectRetry '=' number
+    | changeReplicationSourceRetryCount '=' number
+    | changeReplicationSourceDelay '=' number
+    | changeReplicationSourceSSL '=' number
+    | changeReplicationSourceSSLCA '=' string
+    | changeReplicationSourceSSLCApath '=' string
+    | changeReplicationSourceTLSVersion '=' string
+    | changeReplicationSourceSSLCert '=' string
     | changeReplicationSourceTLSCiphersuites '=' sourceTlsCiphersuitesDef
-    | changeReplicationSourceSSLCipher '=' textStringNoLinebreak
-    | changeReplicationSourceSSLKey '=' textStringNoLinebreak
-    | changeReplicationSourceSSLVerifyServerCert '=' ulong_number
+    | changeReplicationSourceSSLCipher '=' string
+    | changeReplicationSourceSSLKey '=' string
+    | changeReplicationSourceSSLVerifyServerCert '=' number
     | changeReplicationSourceSSLCLR '=' textLiteral
-    | changeReplicationSourceSSLCLRpath '=' textStringNoLinebreak
-    | changeReplicationSourcePublicKey '=' textStringNoLinebreak
-    | changeReplicationSourceGetSourcePublicKey '=' ulong_number
-    | changeReplicationSourceHeartbeatPeriod '=' ulong_number
+    | changeReplicationSourceSSLCLRpath '=' string
+    | changeReplicationSourcePublicKey '=' string
+    | changeReplicationSourceGetSourcePublicKey '=' number
+    | changeReplicationSourceHeartbeatPeriod '=' number
     | 'IGNORE_SERVER_IDS' '=' serverIdList
-    | changeReplicationSourceCompressionAlgorithm '=' textStringLiteral
-    | changeReplicationSourceZstdCompressionLevel '=' ulong_number
-    | changeReplicationSourceAutoPosition '=' ulong_number
+    | changeReplicationSourceCompressionAlgorithm '=' string
+    | changeReplicationSourceZstdCompressionLevel '=' number
+    | changeReplicationSourceAutoPosition '=' number
     | 'PRIVILEGE_CHECKS_USER' '=' privilegeCheckDef
-    | 'REQUIRE_ROW_FORMAT' '=' ulong_number
+    | 'REQUIRE_ROW_FORMAT' '=' number
     | 'REQUIRE_TABLE_PRIMARY_KEY_CHECK' '=' tablePrimaryKeyCheckDef
-    | 'SOURCE_CONNECTION_AUTO_FAILOVER' '=' real_ulong_number
+    | 'SOURCE_CONNECTION_AUTO_FAILOVER' '=' integer
     | 'ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS' '='
         assignGtidsToAnonymousTransactionsDefinition
-    | 'GTID_ONLY' '=' real_ulong_number
+    | 'GTID_ONLY' '=' integer
     | sourceFileDef
     ;
 
@@ -1698,7 +1562,7 @@ changeReplicationSourceZstdCompressionLevel
     ;
 
 privilegeCheckDef
-    : userIdentifierOrText
+    : userName
     | 'NULL'
     ;
 
@@ -1712,19 +1576,19 @@ tablePrimaryKeyCheckDef
 assignGtidsToAnonymousTransactionsDefinition
     : 'OFF'
     | 'LOCAL'
-    | textStringLiteral
+    | string
     ;
 
 sourceTlsCiphersuitesDef
-    : textStringNoLinebreak
+    : string
     | 'NULL'
     ;
 
 sourceFileDef
-    : sourceLogFile '=' textStringNoLinebreak
-    | sourceLogPos '=' ulonglongNumber
-    | 'RELAY_LOG_FILE' '=' textStringNoLinebreak
-    | 'RELAY_LOG_POS' '=' ulong_number
+    : sourceLogFile '=' string
+    | sourceLogPos '=' number
+    | 'RELAY_LOG_FILE' '=' string
+    | 'RELAY_LOG_POS' '=' number
     ;
 
 sourceLogFile
@@ -1738,7 +1602,7 @@ sourceLogPos
     ;
 
 serverIdList
-    : '(' (ulong_number (',' ulong_number)*)? ')'
+    : '(' (number (',' number)*)? ')'
     ;
 
 changeReplication
@@ -1758,11 +1622,11 @@ filterDefinition
     ;
 
 filterDbList
-    : identifier (',' identifier)*
+    : name (',' name)*
     ;
 
 filterTableList
-    : filterTableRef (',' filterTableRef)*
+    : qname (',' qname)*
     ;
 
 filterStringList
@@ -1770,7 +1634,7 @@ filterStringList
     ;
 
 filterWildDbTableString
-    : textStringNoLinebreak // sql_yacc.yy checks for the existance of at least one dot char in the string.
+    : string // sql_yacc.yy checks for the existance of at least one dot char in the string.
     ;
 
 filterDbPairList
@@ -1789,25 +1653,25 @@ stopReplicaStatement
 replicaUntil
     : (
         sourceFileDef
-        | ('SQL_BEFORE_GTIDS' | 'SQL_AFTER_GTIDS') '=' textString
+        | ('SQL_BEFORE_GTIDS' | 'SQL_AFTER_GTIDS') '=' string
         | 'SQL_AFTER_MTS_GAPS'
     ) (',' sourceFileDef)*
     ;
 
 userOption
-    : 'USER' '=' textString
+    : 'USER' '=' string
     ;
 
 passwordOption
-    : 'PASSWORD' '=' textString
+    : 'PASSWORD' '=' string
     ;
 
 defaultAuthOption
-    : 'DEFAULT_AUTH' '=' textString
+    : 'DEFAULT_AUTH' '=' string
     ;
 
 pluginDirOption
-    : 'PLUGIN_DIR' '=' textString
+    : 'PLUGIN_DIR' '=' string
     ;
 
 replicaThreadOptions
@@ -1834,15 +1698,15 @@ groupReplicationStartOption
     ;
 
 groupReplicationUser
-    : 'USER' '=' textStringNoLinebreak
+    : 'USER' '=' string
     ;
 
 groupReplicationPassword
-    : 'PASSWORD' '=' textStringNoLinebreak
+    : 'PASSWORD' '=' string
     ;
 
 groupReplicationPluginAuth
-    : 'DEFAULT_AUTH' '=' textStringNoLinebreak
+    : 'DEFAULT_AUTH' '=' string
     ;
 
 replica
@@ -1854,34 +1718,30 @@ replica
 //----------------------------------------------------------------------------------------------------------------------
 
 preparedStatement
-    : 'PREPARE' identifier 'FROM' (textLiteral | userVariable)
+    : 'PREPARE' name 'FROM' (textLiteral | name)
     | executeStatement
-    | ('DEALLOCATE' | 'DROP') 'PREPARE' identifier
+    | ('DEALLOCATE' | 'DROP') 'PREPARE' name
     ;
 
 executeStatement
-    : 'EXECUTE' identifier ('USING' executeVarList)?
-    ;
-
-executeVarList
-    : userVariable (',' userVariable)*
+    : 'EXECUTE' name ('USING' name ( ',' name )*)?
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
 
 cloneStatement
     : 'CLONE' (
-        'LOCAL' 'DATA' 'DIRECTORY' equal? textStringLiteral
+        'LOCAL' 'DATA' 'DIRECTORY' equal? string
         // Clone remote has been removed in 8.0.14. This alt is taken out by the conditional 'REMOTE'.
         | 'REMOTE' ('FOR' 'REPLICATION')?
-        | 'INSTANCE' 'FROM' user ':' ulong_number 'IDENTIFIED' 'BY'
-            textStringLiteral dataDirSSL?
+        | 'INSTANCE' 'FROM' user ':' number 'IDENTIFIED' 'BY'
+            string dataDirSSL?
     )
     ;
 
 dataDirSSL
     : ssl
-    | 'DATA' 'DIRECTORY' equal? textStringLiteral ssl?
+    | 'DATA' 'DIRECTORY' equal? string ssl?
     ;
 
 ssl
@@ -1902,67 +1762,44 @@ accountManagementStatement
     ;
 
 alterUserStatement
-    : 'ALTER' 'USER' ifExists? (
-        (
-            createUserList
-            | alterUserList
-        ) createUserTail
-        | userFunction (
-            (identifiedByRandomPassword | identifiedByPassword) replacePassword? retainCurrentPassword?
+    : 'ALTER' 'USER' ifExists?
+        ( ( createUserList | alterUser (',' alterUser)* ) createUserTail
+        | userFunction
+            ( (identifiedByRandomPassword | identifiedByPassword) replacePassword? retainCurrentPassword?
             | 'DISCARD' 'OLD' 'PASSWORD'
             | userRegistration?
+            )
+        | user ( 'DEFAULT' 'ROLE' ('ALL' | 'NONE' | roleList) | userRegistration? )
         )
-        | user (
-            'DEFAULT' 'ROLE' ('ALL' | 'NONE' | roleList)
-            | userRegistration?
-        )
-    )
-    ;
-
-alterUserList
-    : alterUser (',' alterUser)*
     ;
 
 alterUser
     : oldAlterUser
-    | (
-        user (
-            identifiedByPassword (
-                'REPLACE' textStringLiteral retainCurrentPassword?
-                | retainCurrentPassword?
-            )
-            | identifiedByRandomPassword (
-                retainCurrentPassword?
-                | 'REPLACE' textStringLiteral retainCurrentPassword?
-            )
-            | identifiedWithPlugin
-            | identifiedWithPluginAsAuth retainCurrentPassword?
-            | identifiedWithPluginByPassword (
-                'REPLACE' textStringLiteral retainCurrentPassword?
-                | retainCurrentPassword?
-            )
-            | identifiedWithPluginByRandomPassword retainCurrentPassword?
-            | discardOldPassword?
-            | 'ADD' factor identification ('ADD' factor identification)?
-            | 'MODIFY' factor identification (
-                'MODIFY' factor identification
-            )?
-            | 'DROP' factor ('DROP' factor)?
+    | user
+        ( identifiedByPassword ( 'REPLACE' string retainCurrentPassword? | retainCurrentPassword? )
+        | identifiedByRandomPassword ( retainCurrentPassword? | 'REPLACE' string retainCurrentPassword? )
+        | identifiedWithPlugin
+        | identifiedWithPluginAsAuth retainCurrentPassword?
+        | identifiedWithPluginByPassword ( 'REPLACE' string retainCurrentPassword? | retainCurrentPassword? )
+        | identifiedWithPluginByRandomPassword retainCurrentPassword?
+        | discardOldPassword?
+        | 'ADD' factor identification ('ADD' factor identification)?
+        | 'MODIFY' factor identification ( 'MODIFY' factor identification )?
+        | 'DROP' factor ('DROP' factor)?
         )
-    )
     ;
 
 oldAlterUser
     : user 'IDENTIFIED' 'BY' (
-        textString 'REPLACE' textString retainCurrentPassword?
-        | textString retainCurrentPassword?
-        | 'RANDOM' 'PASSWORD' ('REPLACE' textString)? retainCurrentPassword?
+        string 'REPLACE' string retainCurrentPassword?
+        | string retainCurrentPassword?
+        | 'RANDOM' 'PASSWORD' ('REPLACE' string)? retainCurrentPassword?
     )
     | user 'IDENTIFIED' 'WITH' (
-        textOrIdentifier (
-            'BY' textString 'REPLACE' textString retainCurrentPassword?
+        name (
+            'BY' string 'REPLACE' string retainCurrentPassword?
             | 'AS' textStringHash retainCurrentPassword?
-            | 'BY' textString retainCurrentPassword?
+            | 'BY' string retainCurrentPassword?
             | 'BY' 'RANDOM' 'PASSWORD' retainCurrentPassword?
         )?
     )
@@ -1974,37 +1811,31 @@ userFunction
     ;
 
 createUserStatement
-    : 'CREATE' 'USER' ifNotExists? createUserList defaultRoleClause? createUserTail
+    : 'CREATE' 'USER' ifNotExists? createUserList ('DEFAULT' 'ROLE' roleList)? createUserTail
     ;
 
 createUserTail
-    : requireClause? connectOptions? accountLockPasswordExpireOptions* (
-        userAttributes
-    )?
+    : requireClause? connectOptions? accountLockPasswordExpireOptions* userAttributes?
     ;
 
 userAttributes
-    : 'ATTRIBUTE' textStringLiteral
-    | 'COMMENT' textStringLiteral
-    ;
-
-defaultRoleClause
-    : 'DEFAULT' 'ROLE' roleList
+    : 'ATTRIBUTE' string
+    | 'COMMENT' string
     ;
 
 requireClause
-    : 'REQUIRE' (
-        requireList
+    : 'REQUIRE'
+        ( requireListElement ('AND'? requireListElement)*
         | ('SSL' | 'X509' | 'NONE')
-    )
+        )
     ;
 
 connectOptions
     : 'WITH' (
-        'MAX_QUERIES_PER_HOUR' ulong_number
-        | 'MAX_UPDATES_PER_HOUR' ulong_number
-        | 'MAX_CONNECTIONS_PER_HOUR' ulong_number
-        | 'MAX_USER_CONNECTIONS' ulong_number
+        'MAX_QUERIES_PER_HOUR' number
+        | 'MAX_UPDATES_PER_HOUR' number
+        | 'MAX_CONNECTIONS_PER_HOUR' number
+        | 'MAX_USER_CONNECTIONS' number
     )+
     ;
 
@@ -2012,13 +1843,13 @@ accountLockPasswordExpireOptions
     : 'ACCOUNT' ('LOCK' | 'UNLOCK')
     | 'PASSWORD' (
         'EXPIRE' (
-            'INTERVAL' real_ulong_number 'DAY'
+            'INTERVAL' integer 'DAY'
             | 'NEVER'
             | 'DEFAULT'
         )?
-        | 'HISTORY' (real_ulong_number | 'DEFAULT')
+        | 'HISTORY' (integer | 'DEFAULT')
         | 'REUSE' 'INTERVAL' (
-            real_ulong_number 'DAY'
+            integer 'DAY'
             | 'DEFAULT'
         )
         | 'REQUIRE' 'CURRENT' (
@@ -2026,8 +1857,8 @@ accountLockPasswordExpireOptions
             | 'OPTIONAL'
         )?
     )
-    | 'FAILED_LOGIN_ATTEMPTS' real_ulong_number
-    | 'PASSWORD_LOCK_TIME' (real_ulong_number | 'UNBOUNDED')
+    | 'FAILED_LOGIN_ATTEMPTS' integer
+    | 'PASSWORD_LOCK_TIME' (integer | 'UNBOUNDED')
     ;
 
 //userAttribute
@@ -2041,15 +1872,11 @@ dropUserStatement
     ;
 
 grantStatement
-    : 'GRANT' (
-        roleOrPrivilegesList 'TO' userList (
-            'WITH' 'ADMIN' 'OPTION'
-        )?
+    : 'GRANT'
+        ( roleOrPrivilegesList 'TO' userList ( 'WITH' 'ADMIN' 'OPTION' )?
         | (roleOrPrivilegesList | 'ALL' 'PRIVILEGES'?) 'ON' aclType? grantIdentifier 'TO' grantTargetList
             versionedRequireClause? grantOptions? grantAs?
-        | 'PROXY' 'ON' user 'TO' grantTargetList (
-            'WITH' 'GRANT' 'OPTION'
-        )?
+        | 'PROXY' 'ON' user 'TO' grantTargetList ( 'WITH' 'GRANT' 'OPTION' )?
     )
     ;
 
@@ -2112,10 +1939,7 @@ roleOrPrivilegesList
     ;
 
 roleOrPrivilege
-    : (
-        roleIdentifierOrText columns?
-        | roleIdentifierOrText (AT_TEXT_SUFFIX | '@' textOrIdentifier)
-    )
+    : ( name columns? | name name )
     | ('SELECT' | 'INSERT' | 'UPDATE' | 'REFERENCES') columns?
     | ( 'DELETE' | 'USAGE' | 'INDEX' | 'DROP' | 'EXECUTE' | 'RELOAD' | 'SHUTDOWN' | 'PROCESS' | 'FILE' | 'PROXY' | 'SUPER' | 'EVENT' | 'TRIGGER' )
     | 'GRANT' 'OPTION'
@@ -2130,22 +1954,18 @@ roleOrPrivilege
 
 grantIdentifier
     : '*' ('.' '*')?
-    | identifier ('.' '*')?
-    | tableRef
-    | identifier '.' tableRef
-    ;
-
-requireList
-    : requireListElement ('AND'? requireListElement)*
+    | name ('.' '*')?
+    | qname
+    | name '.' qname
     ;
 
 requireListElement
-    : ('CIPHER' | 'ISSUER' | 'SUBJECT') textString
+    : ('CIPHER' | 'ISSUER' | 'SUBJECT') string
     ;
 
 grantOption
     : 'GRANT' 'OPTION'
-    | ( 'MAX_QUERIES_PER_HOUR' | 'MAX_UPDATES_PER_HOUR' | 'MAX_CONNECTIONS_PER_HOUR' | 'MAX_USER_CONNECTIONS' ) ulong_number
+    | ( 'MAX_QUERIES_PER_HOUR' | 'MAX_UPDATES_PER_HOUR' | 'MAX_CONNECTIONS_PER_HOUR' | 'MAX_USER_CONNECTIONS' ) number
     ;
 
 setRoleStatement
@@ -2160,43 +1980,32 @@ roleList
     ;
 
 role
-    : roleIdentifierOrText userVariable?
+    : name name?
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
 
 tableAdministrationStatement
-    : 'ANALYZE' noWriteToBinLog? 'TABLE' tableRefList histogram?
-    | 'CHECK' 'TABLE' tableRefList checkOption*
-    | 'CHECKSUM' 'TABLE' tableRefList (
-        'QUICK'
-        | 'EXTENDED'
-    )?
-    | 'OPTIMIZE' noWriteToBinLog? 'TABLE' tableRefList
-    | 'REPAIR' noWriteToBinLog? 'TABLE' tableRefList repairType*
-    ;
-
-histogramAutoUpdate
-    : ('MANUAL' | 'AUTO') 'UPDATE'
-    ;
-
-histogramUpdateParam
-    : histogramNumBuckets? histogramAutoUpdate?
-    | 'USING' 'DATA' textStringLiteral
-    ;
-
-histogramNumBuckets
-    : 'WITH' INT_NUMBER 'BUCKETS'
+    : 'ANALYZE' noWriteToBinLog? 'TABLE' qnames histogram?
+    | 'CHECK' 'TABLE' qnames checkOption*
+    | 'CHECKSUM' 'TABLE' qnames ( 'QUICK' | 'EXTENDED' )?
+    | 'OPTIMIZE' noWriteToBinLog? 'TABLE' qnames
+    | 'REPAIR' noWriteToBinLog? 'TABLE' qnames repairType*
     ;
 
 histogram
-    : 'UPDATE' 'HISTOGRAM' 'ON' identifierList histogramUpdateParam
-    | 'DROP' 'HISTOGRAM' 'ON' identifierList
+    : 'UPDATE' 'HISTOGRAM' 'ON' name (',' name)* histogramUpdateParam
+    | 'DROP' 'HISTOGRAM' 'ON' name (',' name)*
+    ;
+
+histogramUpdateParam
+    : ('WITH' INT_NUMBER 'BUCKETS')? ('MANUAL' | 'AUTO') 'UPDATE'?
+    | 'USING' 'DATA' string
     ;
 
 checkOption
     : 'FOR' 'UPGRADE'
-    | ('QUICK' | 'FAST' | 'MEDIUM' | 'EXTENDED' | 'CHANGED')
+    | 'QUICK' | 'FAST' | 'MEDIUM' | 'EXTENDED' | 'CHANGED'
     ;
 
 repairType
@@ -2207,23 +2016,10 @@ repairType
 
 //----------------------------------------------------------------------------------------------------------------------
 
-uninstallStatement
-    : 'UNINSTALL' (
-        'PLUGIN' identifier
-        | 'COMPONENT' textStringLiteral (',' textStringLiteral)*
-    )
-    ;
-
 installStatement
-    : 'INSTALL' (
-        'PLUGIN' identifier 'SONAME' textStringLiteral
-        | 'COMPONENT' textStringLiteralList installSetValueList?
-    )
-    ;
-
-installOptionType
-    : 'GLOBAL'
-    | 'PERSIST'
+    : 'INSTALL' ( 'PLUGIN' name 'SONAME' string | 'COMPONENT' strings ('SET' installSetValue (
+        ',' installSetValue
+    )*)? )
     ;
 
 installSetRvalue
@@ -2231,24 +2027,19 @@ installSetRvalue
     | 'ON'
     ;
 
+// TODO replace w/ setter
 installSetValue
-    : installOptionType lvalueVariable equal installSetRvalue
-    ;
-
-installSetValueList
-    : 'SET' installSetValue (
-        ',' installSetValue
-    )*
+    : ('GLOBAL' | 'PERSIST') lvalueVariable equal installSetRvalue
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
 
 setStatement
     : 'SET'
-      ( optionValueNoOptionType (',' optionValue)*
-      | 'TRANSACTION' transactionCharacteristics
-      | optionType startOptionValueListFollowingOptionType
-      | 'PASSWORD' ('FOR' user)? equal ( textString replacePassword? retainCurrentPassword? | textString replacePassword? retainCurrentPassword? | 'PASSWORD' '(' textString ')' )
+      ( optionValueNoOptionType (',' (scope lvalueVariable equal expr | optionValueNoOptionType))*
+      | scope? 'TRANSACTION' transactionCharacteristics
+      | scope? lvalueVariable equal expr (',' (scope lvalueVariable equal expr | optionValueNoOptionType))*
+      | 'PASSWORD' ('FOR' user)? equal ( string replacePassword? retainCurrentPassword? | 'PASSWORD' '(' string ')' )
       | 'PASSWORD' ('FOR' user)? 'TO' 'RANDOM' replacePassword? retainCurrentPassword?
       )
     ;
@@ -2263,51 +2054,19 @@ transactionAccessMode
     ;
 
 isolationLevel
-    : 'ISOLATION' 'LEVEL' (
-        'REPEATABLE' 'READ'
+    : 'ISOLATION' 'LEVEL'
+        ( 'REPEATABLE' 'READ'
         | 'READ' ('COMMITTED' | 'UNCOMMITTED')
         | 'SERIALIZABLE'
-    )
+        )
     ;
 
 optionValueNoOptionType
-    : lvalueVariable equal setExprOrDefault
-    | charsetClause
-    | userVariable equal expr
-    | '@@' setVarIdentType? lvalueVariable equal setExprOrDefault
-    | 'NAMES' (
-        equal expr
-        | charsetName collate?
-        | 'DEFAULT'
-    )
-    ;
-
-optionValue
-    : optionType lvalueVariable equal setExprOrDefault
-    | optionValueNoOptionType
-    ;
-
-//setSystemVariable
-//    : '@@' setVarIdentType? lvalueVariable
-//    ;
-
-startOptionValueListFollowingOptionType
-    : optionValueFollowingOptionType (',' optionValue)*
-    | 'TRANSACTION' transactionCharacteristics
-    ;
-
-optionValueFollowingOptionType
-    : lvalueVariable equal setExprOrDefault
-    ;
-
-setExprOrDefault
-    : expr
-    | 'DEFAULT'
-    | 'ON'
-    | 'ALL'
-    | 'BINARY'
-    | 'ROW'
-    | 'SYSTEM'
+    : lvalueVariable equal expr
+    | charset
+//    | name equal expr
+    | qname equal expr
+    | 'NAMES' ( equal expr | name collate? | 'DEFAULT' )
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -2344,90 +2103,12 @@ showPluginsStatement
     : 'SHOW' 'PLUGINS'
     ;
 
-showEngineLogsStatement
-    : 'SHOW' 'ENGINE' engineOrAll 'LOGS'
-    ;
-
-showEngineMutexStatement
-    : 'SHOW' 'ENGINE' engineOrAll 'MUTEX'
-    ;
-
-showEngineStatusStatement
-    : 'SHOW' 'ENGINE' engineOrAll 'STATUS'
-    ;
-
-showColumnsStatement
-    : 'SHOW' showCommandType? 'COLUMNS' ('FROM' | 'IN') tableRef inDb? likeOrWhere?
-    ;
-
-showBinaryLogsStatement
-    : 'SHOW' ('BINARY' | 'MASTER') 'LOGS'
-    ;
-
-showBinaryLogStatusStatement
-    : 'SHOW' 'BINARY' 'LOG' 'STATUS'
-    ;
-
-showReplicasStatement
-    : 'SHOW' (replica 'HOSTS' | 'REPLICAS')
-    ;
-
-showBinlogEventsStatement
-    : 'SHOW' 'BINLOG' 'EVENTS' ('IN' textString)? (
-        'FROM' ulonglongNumber
-    )? limit? channel?
-    ;
-
-showRelaylogEventsStatement
-    : 'SHOW' 'RELAYLOG' 'EVENTS' ('IN' textString)? (
-        'FROM' ulonglongNumber
-    )? limit? channel?
-    ;
-
-showKeysStatement
-    : 'SHOW' 'EXTENDED'? ('INDEX' | 'INDEXES' | 'KEYS') fromOrIn tableRef inDb? where?
-    ;
-
-showEnginesStatement
-    : 'SHOW' 'STORAGE'? 'ENGINES'
-    ;
-
-showCountWarningsStatement
-    : 'SHOW' 'COUNT' '(' '*' ')' 'WARNINGS'
-    ;
-
-showCountErrorsStatement
-    : 'SHOW' 'COUNT' '(' '*' ')' 'ERRORS'
-    ;
-
-showWarningsStatement
-    : 'SHOW' 'WARNINGS' limit?
-    ;
-
-showErrorsStatement
-    : 'SHOW' 'ERRORS' limit?
-    ;
-
-showProfilesStatement
-    : 'SHOW' 'PROFILES'
-    ;
-
-showProfileStatement
-    : 'SHOW' 'PROFILE' profileDefinitions? (
-        'FOR' 'QUERY' INT_NUMBER
-    )? limit?
-    ;
-
-showStatusStatement
-    : 'SHOW' optionType? 'STATUS' likeOrWhere?
-    ;
-
 showProcessListStatement
     : 'SHOW' 'FULL'? 'PROCESSLIST'
     ;
 
 showVariablesStatement
-    : 'SHOW' optionType? 'VARIABLES' likeOrWhere?
+    : 'SHOW' scope? 'VARIABLES' likeOrWhere?
     ;
 
 showCharacterSetStatement
@@ -2447,15 +2128,15 @@ showGrantsStatement
     ;
 
 showCreateDatabaseStatement
-    : 'SHOW' 'CREATE' 'DATABASE' ifNotExists? identifier
+    : 'SHOW' 'CREATE' 'DATABASE' ifNotExists? name
     ;
 
 showCreateTableStatement
-    : 'SHOW' 'CREATE' 'TABLE' tableRef
+    : 'SHOW' 'CREATE' 'TABLE' qname
     ;
 
 showCreateViewStatement
-    : 'SHOW' 'CREATE' 'VIEW' viewRef
+    : 'SHOW' 'CREATE' 'VIEW' qname
     ;
 
 showMasterStatusStatement
@@ -2467,15 +2148,15 @@ showReplicaStatusStatement
     ;
 
 showCreateProcedureStatement
-    : 'SHOW' 'CREATE' 'PROCEDURE' qualifiedIdentifier
+    : 'SHOW' 'CREATE' 'PROCEDURE' qname
     ;
 
 showCreateFunctionStatement
-    : 'SHOW' 'CREATE' 'FUNCTION' qualifiedIdentifier
+    : 'SHOW' 'CREATE' 'FUNCTION' qname
     ;
 
 showCreateTriggerStatement
-    : 'SHOW' 'CREATE' 'TRIGGER' qualifiedIdentifier
+    : 'SHOW' 'CREATE' 'TRIGGER' qname
     ;
 
 showCreateProcedureStatusStatement
@@ -2487,15 +2168,15 @@ showCreateFunctionStatusStatement
     ;
 
 showCreateProcedureCodeStatement
-    : 'SHOW' 'CREATE' 'PROCEDURE' 'CODE' qualifiedIdentifier
+    : 'SHOW' 'CREATE' 'PROCEDURE' 'CODE' qname
     ;
 
 showCreateFunctionCodeStatement
-    : 'SHOW' 'CREATE' 'FUNCTION' 'CODE' qualifiedIdentifier
+    : 'SHOW' 'CREATE' 'FUNCTION' 'CODE' qname
     ;
 
 showCreateEventStatement
-    : 'SHOW' 'CREATE' 'EVENT' qualifiedIdentifier
+    : 'SHOW' 'CREATE' 'EVENT' qname
     ;
 
 showCreateUserStatement
@@ -2508,7 +2189,7 @@ showCommandType
     ;
 
 engineOrAll
-    : textOrIdentifier
+    : name
     | 'ALL'
     ;
 
@@ -2518,7 +2199,7 @@ fromOrIn
     ;
 
 inDb
-    : fromOrIn identifier
+    : fromOrIn name
     ;
 
 profileDefinitions
@@ -2544,7 +2225,7 @@ profileDefinition
 otherAdministrativeStatement
     : 'BINLOG' textLiteral
     | 'CACHE' 'INDEX' keyCacheListOrParts 'IN' (
-        identifier
+        name
         | 'DEFAULT'
     )
     | 'FLUSH' noWriteToBinLog? (
@@ -2566,11 +2247,11 @@ keyCacheList
     ;
 
 assignToKeycache
-    : tableRef cacheKeyList?
+    : qname cacheKeyList?
     ;
 
 assignToKeycachePartition
-    : tableRef 'PARTITION' '(' allOrPartitionNameList ')' cacheKeyList?
+    : qname 'PARTITION' '(' allOrPartitionNameList ')' cacheKeyList?
     ;
 
 cacheKeyList
@@ -2578,7 +2259,7 @@ cacheKeyList
     ;
 
 keyUsageElement
-    : identifier
+    : name
     | 'PRIMARY'
     ;
 
@@ -2609,7 +2290,7 @@ logType
 flushTables
     : ('TABLES' | 'TABLE') (
         'WITH' 'READ' 'LOCK'
-        | identifierList flushTablesOptions?
+        | name (',' name)* flushTablesOptions?
     )?
     ;
 
@@ -2619,7 +2300,7 @@ flushTablesOptions
     ;
 
 preloadTail
-    : tableRef adminPartition cacheKeyList? ('IGNORE' 'LEAVES')?
+    : qname adminPartition cacheKeyList? ('IGNORE' 'LEAVES')?
     | preloadList
     ;
 
@@ -2628,7 +2309,7 @@ preloadList
     ;
 
 preloadKeys
-    : tableRef cacheKeyList? ('IGNORE' 'LEAVES')?
+    : qname cacheKeyList? ('IGNORE' 'LEAVES')?
     ;
 
 adminPartition
@@ -2645,7 +2326,7 @@ resourceGroupManagement
     ;
 
 createResourceGroup
-    : 'CREATE' 'RESOURCE' 'GROUP' identifier 'TYPE' equal? (
+    : 'CREATE' 'RESOURCE' 'GROUP' name 'TYPE' equal? (
         'USER'
         | 'SYSTEM'
     ) resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable?
@@ -2669,20 +2350,20 @@ resourceGroupEnableDisable
     ;
 
 alterResourceGroup
-    : 'ALTER' 'RESOURCE' 'GROUP' identifier resourceGroupVcpuList? resourceGroupPriority?
+    : 'ALTER' 'RESOURCE' 'GROUP' name resourceGroupVcpuList? resourceGroupPriority?
         resourceGroupEnableDisable? 'FORCE'?
     ;
 
 setResourceGroup
-    : 'SET' 'RESOURCE' 'GROUP' identifier ('FOR' threadIdList)?
+    : 'SET' 'RESOURCE' 'GROUP' name ('FOR' threadIdList)?
     ;
 
 threadIdList
-    : real_ulong_number (','? real_ulong_number)*
+    : integer (','? integer)*
     ;
 
 dropResourceGroup
-    : 'DROP' 'RESOURCE' 'GROUP' identifier 'FORCE'?
+    : 'DROP' 'RESOURCE' 'GROUP' name 'FORCE'?
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -2690,31 +2371,29 @@ dropResourceGroup
 utilityStatement
     : describeStatement
     | explainStatement
-    | helpCommand
-    | useCommand
-    | restartServer
+    | 'HELP' name
+    | 'USE' name
+    | 'RESTART'
     ;
 
 describeStatement
-    : ('EXPLAIN' | 'DESCRIBE' | 'DESC') tableRef (
-        textString
-        | fieldIdentifier
+    : ('EXPLAIN' | 'DESCRIBE' | 'DESC') qname (
+        string
+        | qname
     )?
     ;
 
 explainStatement
     : ('EXPLAIN' | 'DESCRIBE' | 'DESC') explainOptions? (
-        'FOR' 'DATABASE' textOrIdentifier
+        'FOR' 'DATABASE' name
     )? explainableStatement
     ;
 
 explainOptions
-    : 'FORMAT' '=' textOrIdentifier (
-        explainInto
-    )?
+    : 'FORMAT' '=' name ( 'INTO' '@' name )?
     | 'EXTENDED'
     | 'ANALYZE'
-    | 'ANALYZE' 'FORMAT' '=' textOrIdentifier
+    | 'ANALYZE' 'FORMAT' '=' name
     ;
 
 explainableStatement
@@ -2723,26 +2402,8 @@ explainableStatement
     | insertStatement
     | replaceStatement
     | updateStatement
-    | 'FOR' 'CONNECTION' real_ulong_number
+    | 'FOR' 'CONNECTION' integer
     ;
-
-explainInto
-    : 'INTO' '@' textOrIdentifier
-    ;
-
-helpCommand
-    : 'HELP' textOrIdentifier
-    ;
-
-useCommand
-    : 'USE' identifier
-    ;
-
-restartServer
-    : 'RESTART'
-    ;
-
-//----------------- Expression support ---------------------------------------------------------------------------------
 
 expr
     : boolPri (
@@ -2774,13 +2435,13 @@ compOp
 predicate
     : bitExpr (
         notRule? predicateOperations
-        | 'MEMBER' 'OF'? simpleExprWithParentheses
+        | 'MEMBER' 'OF'? '(' simpleExpr ')'
         | 'SOUNDS' 'LIKE' bitExpr
     )?
     ;
 
 predicateOperations
-    : 'IN' ('(' select ')' | '(' exprList ')')
+    : 'IN' ('(' select ')' | '(' expr (',' expr)* ')')
     | 'BETWEEN' bitExpr 'AND' predicate
     | 'LIKE' simpleExpr ('ESCAPE' simpleExpr)?
     | 'REGEXP' bitExpr
@@ -2789,13 +2450,7 @@ predicateOperations
 bitExpr
     : simpleExpr
     | bitExpr '^' bitExpr
-    | bitExpr (
-        '*'
-        | '/'
-        | '%'
-        | 'DIV'
-        | 'MOD'
-    ) bitExpr
+    | bitExpr ( '*' | '/' | '%' | 'DIV' | 'MOD' ) bitExpr
     | bitExpr ('+' | '-') bitExpr
     | bitExpr ('+' | '-') 'INTERVAL' expr interval
     | bitExpr ('<<' | '>>') bitExpr
@@ -2804,75 +2459,61 @@ bitExpr
     ;
 
 simpleExpr
-    : fieldIdentifier jsonOperator?
+    : qname jsonOperator?
     | runtimeFunctionCall
     | functionCall
-    | simpleExpr 'COLLATE' textOrIdentifier
+    | simpleExpr 'COLLATE' name
     | literal
-    | PARAM_MARKER
-    | rvalueSystemOrUserVariable
-    | userVariable ':=' expr
-    | sumExpr
-    | groupingOperation
+    | PARAM
+//    | rvalueSystemOrUserVariable
+    | qname ':=' expr
+    | sumExpr windowingClause?
+    | 'GROUPING' '(' expr (',' expr)* ')'
     | windowFunctionCall
     | simpleExpr 'CONCAT_PIPES' simpleExpr
     | ('+' | '-' | '~') simpleExpr
     | not2Rule simpleExpr
-    | 'ROW'? '(' exprList ')'
+    | 'ROW'? '(' expr (',' expr)* ')'
     | 'EXISTS'? '(' select ')'
-    | '{' identifier expr '}'
+    | '{' name expr '}'
     | 'MATCH' identListArg 'AGAINST' '(' bitExpr fulltextOptions? ')'
     | 'BINARY' simpleExpr
     | 'CAST' '(' expr ('AT' 'LOCAL')? 'AS' castType ('ARRAY')? ')'
-    | 'CAST' '(' expr 'AT' 'TIME' 'ZONE' 'INTERVAL'? textStringLiteral 'AS'
+    | 'CAST' '(' expr 'AT' 'TIME' 'ZONE' 'INTERVAL'? string 'AS'
         'DATETIME' typeDatetimePrecision ')'
     | 'CASE' expr? (whenExpression thenExpression)+ elseExpression? 'END'
     | 'CONVERT' '(' expr ',' castType ')'
-    | 'CONVERT' '(' expr 'USING' charsetName ')'
-    | 'DEFAULT' '(' simpleIdentifier ')'
-    | 'VALUES' '(' simpleIdentifier ')'
+    | 'CONVERT' '(' expr 'USING' name ')'
+    | 'DEFAULT' '(' qname ')'
+    | 'VALUES' '(' qname ')'
     | 'INTERVAL' expr interval '+' expr
     ;
 
 
 jsonOperator
-    : '->' textStringLiteral
-    | '->>' textStringLiteral
+    : '->' string
+    | '->>' string
     ;
 
 sumExpr
-    : 'AVG' '(' 'DISTINCT'? inSumExpr ')' windowingClause?
-    | ('BIT_AND' | 'BIT_OR' | 'BIT_XOR') '(' inSumExpr ')' windowingClause?
-    | jsonFunction
-    | 'ST_COLLECT' '(' 'DISTINCT'? inSumExpr ')' windowingClause?
-    | 'COUNT' '(' ( 'ALL'? '*' | inSumExpr | 'DISTINCT' exprList ) ')' windowingClause?
-    | ('MIN' | 'MAX') '(' 'DISTINCT'? inSumExpr ')' windowingClause?
-    | ( 'STD' | 'VARIANCE' | 'STDDEV_SAMP' | 'VAR_SAMP' | 'SUM' ) '(' inSumExpr ')' windowingClause?
-    | 'SUM' '(' 'DISTINCT' inSumExpr ')' windowingClause?
-    | 'GROUP_CONCAT' '(' 'DISTINCT'? exprList orderBy? ( 'SEPARATOR' textString )? ')' windowingClause?
-    ;
-
-groupingOperation
-    : 'GROUPING' '(' exprList ')'
+    : 'AVG' '(' 'DISTINCT'? 'ALL'? expr ')'
+    | ('BIT_AND' | 'BIT_OR' | 'BIT_XOR') '(' 'ALL'? expr ')'
+    | 'JSON_ARRAYAGG' '(' 'ALL'? expr ')'
+    | 'JSON_OBJECTAGG' '(' 'ALL'? expr ',' 'ALL'? expr ')'
+    | 'ST_COLLECT' '(' 'DISTINCT'? 'ALL'? expr ')'
+    | 'COUNT' '(' ( 'ALL'? '*' | 'ALL'? expr | 'DISTINCT' expr (',' expr)* ) ')'
+    | ('MIN' | 'MAX') '(' 'DISTINCT'? 'ALL'? expr ')'
+    | ( 'STD' | 'VARIANCE' | 'STDDEV_SAMP' | 'VAR_SAMP' | 'SUM' ) '(' 'ALL'? expr ')'
+    | 'SUM' '(' 'DISTINCT' 'ALL'? expr ')'
+    | 'GROUP_CONCAT' '(' 'DISTINCT'? expr (',' expr)* orderBy? ( 'SEPARATOR' string )? ')'
     ;
 
 windowFunctionCall
-    : (
-        'ROW_NUMBER'
-        | 'RANK'
-        | 'DENSE_RANK'
-        | 'CUME_DIST'
-        | 'PERCENT_RANK'
-    ) '(' ')' windowingClause
-    | 'NTILE' (
-        '(' stableInteger ')'
-        | simpleExprWithParentheses
-    ) windowingClause
-    | ('LEAD' | 'LAG') '(' expr leadLagInfo? ')' nullTreatment? windowingClause
-    | ('FIRST_VALUE' | 'LAST_VALUE') exprWithParentheses nullTreatment? windowingClause
-    | 'NTH_VALUE' '(' expr ',' simpleExpr ')' (
-        'FROM' ('FIRST' | 'LAST')
-    )? nullTreatment? windowingClause
+    : ( 'ROW_NUMBER' | 'RANK' | 'DENSE_RANK' | 'CUME_DIST' | 'PERCENT_RANK' ) '(' ')' windowingClause
+    | 'NTILE' ( '(' integer ')' | '(' simpleExpr ')' ) windowingClause
+    | ('LEAD' | 'LAG') '(' expr (',' expr (',' expr)? )? ')' nullTreatment? windowingClause
+    | ('FIRST_VALUE' | 'LAST_VALUE') '(' expr ')' nullTreatment? windowingClause
+    | 'NTH_VALUE' '(' expr ',' simpleExpr ')' ( 'FROM' ('FIRST' | 'LAST') )? nullTreatment? windowingClause
     ;
 
 samplingMethod
@@ -2881,9 +2522,10 @@ samplingMethod
     ;
 
 samplingPercentage
-    : ulonglongNumber
-    | '@' textOrIdentifier
-    | PARAM_MARKER
+    : number
+//    | '@' textOrIdentifier
+    | name
+    | PARAM
     ;
 
 tablesampleClause
@@ -2891,49 +2533,16 @@ tablesampleClause
     ;
 
 windowingClause
-    : 'OVER' (identifier | windowSpec)
-    ;
-
-leadLagInfo
-    : ',' (
-        ulonglongNumber
-        | PARAM_MARKER
-        | stableInteger
-    ) (',' expr)?
-    ;
-
-// The stable_integer nonterminal symbol is not really constant, but constant for the duration of an execution.
-stableInteger
-    : INT_NUMBER
-    | paramOrVar
-    ;
-
-paramOrVar
-    : PARAM_MARKER
-    | identifier
-    | '@' textOrIdentifier
+    : 'OVER' (name | windowSpec)
     ;
 
 nullTreatment
     : ('RESPECT' | 'IGNORE') 'NULLS'
     ;
 
-jsonFunction
-    : 'JSON_ARRAYAGG' '(' inSumExpr ')' windowingClause?
-    | 'JSON_OBJECTAGG' '(' inSumExpr ',' inSumExpr ')' windowingClause?
-    ;
-
-inSumExpr
-    : 'ALL'? expr
-    ;
-
 identListArg
-    : identList
-    | '(' identList ')'
-    ;
-
-identList
-    : simpleIdentifier (',' simpleIdentifier)*
+    : qnames
+    | '(' qnames ')'
     ;
 
 fulltextOptions
@@ -2945,66 +2554,65 @@ fulltextOptions
 // function_call_keyword and function_call_nonkeyword in sql_yacc.yy.
 runtimeFunctionCall
     // Function names that are keywords.
-    :
-    'CHAR' '(' exprList ('USING' charsetName)? ')'
+    : 'CHAR' '(' expr (',' expr)* ('USING' name)? ')'
     | 'CURRENT_USER' ('(' ')')?
-    | 'DATE' exprWithParentheses
-    | 'DAY' exprWithParentheses
-    | 'HOUR' exprWithParentheses
+    | 'DATE' '(' expr ')'
+    | 'DAY' '(' expr ')'
+    | 'HOUR' '(' expr ')'
     | 'INSERT' '(' expr ',' expr ',' expr ',' expr ')'
     | 'INTERVAL' '(' expr (',' expr)+ ')'
     | 'JSON_VALUE' '(' simpleExpr ',' textLiteral returningType? onEmptyOrError ')'
     | 'LEFT' '(' expr ',' expr ')'
-    | 'MINUTE' exprWithParentheses
-    | 'MONTH' exprWithParentheses
+    | 'MINUTE' '(' expr ')'
+    | 'MONTH' '(' expr ')'
     | 'RIGHT' '(' expr ',' expr ')'
-    | 'SECOND' exprWithParentheses
-    | 'TIME' exprWithParentheses
+    | 'SECOND' '(' expr ')'
+    | 'TIME' '(' expr ')'
     | 'TIMESTAMP' '(' expr (',' expr)? ')'
     | 'TRIM' '(' ( expr ('FROM' expr)? | 'LEADING' expr? 'FROM' expr | 'TRAILING' expr? 'FROM' expr | 'BOTH' expr? 'FROM' expr ) ')'
     | userFunction
-    | 'VALUES' exprWithParentheses
-    | 'YEAR' exprWithParentheses
+    | 'VALUES' '(' expr ')'
+    | 'YEAR' '(' expr ')'
 
     // Function names that are not keywords.
     | ('ADDDATE' | 'SUBDATE') '(' expr ',' ( expr | 'INTERVAL' expr interval ) ')'
     | 'CURDATE' ('(' ')')?
-    | 'CURTIME' timeFunctionParameters?
+    | 'CURTIME' ('(' integer? ')')?
     | ('DATE_ADD' | 'DATE_SUB') '(' expr ',' 'INTERVAL' expr interval ')'
     | 'EXTRACT' '(' interval 'FROM' expr ')'
-    | 'GET_FORMAT' '(' dateTimeTtype ',' expr ')'
+    | 'GET_FORMAT' '(' ('DATE' | 'TIME' | 'DATETIME' | 'TIMESTAMP') ',' expr ')'
     | 'LOG' '(' expr ( ',' expr )? ')'
-    | 'NOW' timeFunctionParameters?
+    | 'NOW' ('(' integer? ')')?
     | 'POSITION' '(' bitExpr 'IN' expr ')'
     | substringFunction
-    | 'SYSDATE' timeFunctionParameters?
+    | 'SYSDATE' ('(' integer? ')')?
     | ('TIMESTAMPADD' | 'TIMESTAMPDIFF') '(' intervalTimeStamp ',' expr ',' expr ')'
     | 'UTC_DATE' ('(' ')')?
-    | 'UTC_TIME' timeFunctionParameters?
-    | 'UTC_TIMESTAMP' timeFunctionParameters?
+    | 'UTC_TIME' ('(' integer? ')')?
+    | 'UTC_TIMESTAMP' ('(' integer? ')')?
 
     // Function calls with other conflicts.
-    | 'ASCII' exprWithParentheses
-    | 'CHARSET' exprWithParentheses
-    | 'COALESCE' exprListWithParentheses
-    | 'COLLATION' exprWithParentheses
+    | 'ASCII' '(' expr ')'
+    | 'CHARSET' '(' expr ')'
+    | 'COALESCE' '(' expr (',' expr)* ')'
+    | 'COLLATION' '(' expr ')'
     | 'DATABASE' '(' ')'
     | 'IF' '(' expr ',' expr ',' expr ')'
     | 'FORMAT' '(' expr ',' expr (',' expr)? ')'
-    | 'MICROSECOND' exprWithParentheses
+    | 'MICROSECOND' '(' expr ')'
     | 'MOD' '(' expr ',' expr ')'
-    | 'PASSWORD' exprWithParentheses
-    | 'QUARTER' exprWithParentheses
+    | 'PASSWORD' '(' expr ')'
+    | 'QUARTER' '(' expr ')'
     | 'REPEAT' '(' expr ',' expr ')'
     | 'REPLACE' '(' expr ',' expr ',' expr ')'
-    | 'REVERSE' exprWithParentheses
+    | 'REVERSE' '(' expr ')'
     | 'ROW_COUNT' '(' ')'
     | 'TRUNCATE' '(' expr ',' expr ')'
     | 'WEEK' '(' expr (',' expr)? ')'
     | 'WEIGHT_STRING' '(' expr (
-        ('AS' 'CHAR' wsNumCodepoints)?
-        | 'AS' 'BINARY' wsNumCodepoints
-        | ',' ulong_number ',' ulong_number ',' ulong_number
+        ('AS' 'CHAR' '(' integer ')')?
+        | 'AS' 'BINARY' '(' integer ')'
+        | ',' number ',' number ',' number
     ) ')'
     | geometryFunction
     ;
@@ -3019,17 +2627,13 @@ returningType
     ;
 
 geometryFunction
-    : 'GEOMETRYCOLLECTION' '(' exprList? ')'
-    | 'LINESTRING' exprListWithParentheses
-    | 'MULTILINESTRING' exprListWithParentheses
-    | 'MULTIPOINT' exprListWithParentheses
-    | 'MULTIPOLYGON' exprListWithParentheses
+    : 'GEOMETRYCOLLECTION' '(' (expr (',' expr)*)? ')'
+    | 'LINESTRING' '(' expr (',' expr)* ')'
+    | 'MULTILINESTRING' '(' expr (',' expr)* ')'
+    | 'MULTIPOINT' '(' expr (',' expr)* ')'
+    | 'MULTIPOLYGON' '(' expr (',' expr)* ')'
     | 'POINT' '(' expr ',' expr ')'
-    | 'POLYGON' exprListWithParentheses
-    ;
-
-timeFunctionParameters
-    : '(' (INT_NUMBER)? ')'
+    | 'POLYGON' '(' expr (',' expr)* ')'
     ;
 
 //weightStringLevels
@@ -3043,13 +2647,6 @@ timeFunctionParameters
 //    : real_ulong_number (('ASC' | 'DESC') 'REVERSE'? | 'REVERSE')?
 //    ;
 
-dateTimeTtype
-    : 'DATE'
-    | 'TIME'
-    | 'DATETIME'
-    | 'TIMESTAMP'
-    ;
-
 substringFunction
     : 'SUBSTRING' '(' expr (
         ',' expr (',' expr)?
@@ -3058,39 +2655,26 @@ substringFunction
     ;
 
 functionCall
-    : pureIdentifier '(' udfExprList? ')'   // For both UDF + other functions.
-    | qualifiedIdentifier '(' exprList? ')' // Other functions only.
-    ;
-
-udfExprList
-    : udfExpr (',' udfExpr)*
+    : IDENTIFIER '(' (udfExpr ( ',' udfExpr )*)? ')'   // For both UDF + other functions.
+    | qname '(' (expr (',' expr)*)? ')' // Other functions only.
     ;
 
 udfExpr
-    : expr selectAlias?
+    : expr alias?
     ;
 
-userVariable
-    : '@' textOrIdentifier
-    | AT_TEXT_SUFFIX
-    ;
+//userVariable
+//    : '@' name
+//    | AT_TEXT_SUFFIX
+//    ;
 
-rvalueSystemOrUserVariable
-    : userVariable
-    | '@@' rvalueSystemVariableType? rvalueSystemVariable
-    ;
+//rvalueSystemOrUserVariable
+//    : userVariable
+//    | '@@' rvalueSystemVariableType? qname
+//    ;
 
 lvalueVariable
-    : (
-        // Check in semantic phase that the first id is not global/local/session/default.
-        identifier dotIdentifier?
-        | lValueIdentifier dotIdentifier?
-    )
-    | 'DEFAULT' dotIdentifier
-    ;
-
-rvalueSystemVariable
-    : textOrIdentifier dotIdentifier?
+    :  'DEFAULT'? qname
     ;
 
 whenExpression
@@ -3109,16 +2693,16 @@ castType
     : 'BINARY' fieldLength?
     | 'CHAR' fieldLength? charsetWithOptBinary?
     | nchar fieldLength?
-    | 'SIGNED' 'INT'?
-    | 'UNSIGNED' 'INT'?
+    | 'SIGNED' ( 'INT' | 'INTEGER' )?
+    | 'UNSIGNED' ( 'INT' | 'INTEGER' )?
     | 'DATE'
     | 'YEAR'
     | 'TIME' typeDatetimePrecision?
     | 'DATETIME' typeDatetimePrecision?
-    | 'DECIMAL' floatOptions?
+    | ('DEC' | 'DECIMAL' ) floatOptions?
     | 'JSON'
     | realType
-    | 'FLOAT' (precision)?
+    | 'FLOAT' (floatOptions)?
     | 'POINT'
     | 'LINESTRING'
     | 'POLYGON'
@@ -3128,13 +2712,8 @@ castType
     | 'GEOMETRYCOLLECTION'
     ;
 
-exprList
-    : expr (',' expr)*
-    ;
-
 charset
-    : 'CHAR' 'SET'
-    | 'CHARSET'
+    : ( 'CHAR' 'SET' | 'CHARACTER' 'SET' | 'CHARSET' ) name
     ;
 
 notRule
@@ -3150,22 +2729,19 @@ not2Rule
 // None of the microsecond variants can be used in schedules (e.g. events).
 interval
     : intervalTimeStamp
-    | (
-        'SECOND_MICROSECOND'
-        | 'MINUTE_MICROSECOND'
-        | 'MINUTE_SECOND'
-        | 'HOUR_MICROSECOND'
-        | 'HOUR_SECOND'
-        | 'HOUR_MINUTE'
-        | 'DAY_MICROSECOND'
-        | 'DAY_SECOND'
-        | 'DAY_MINUTE'
-        | 'DAY_HOUR'
-        | 'YEAR_MONTH'
-    )
+    | 'SECOND_MICROSECOND'
+    | 'MINUTE_MICROSECOND'
+    | 'MINUTE_SECOND'
+    | 'HOUR_MICROSECOND'
+    | 'HOUR_SECOND'
+    | 'HOUR_MINUTE'
+    | 'DAY_MICROSECOND'
+    | 'DAY_SECOND'
+    | 'DAY_MINUTE'
+    | 'DAY_HOUR'
+    | 'YEAR_MONTH'
     ;
 
-// Support for SQL_TSI_* units is added by mapping those to tokens without SQL_TSI_ prefix.
 intervalTimeStamp
     : 'MICROSECOND'
     | 'SECOND'
@@ -3178,32 +2754,12 @@ intervalTimeStamp
     | 'YEAR'
     ;
 
-exprListWithParentheses
-    : '(' exprList ')'
-    ;
-
-exprWithParentheses
-    : '(' expr ')'
-    ;
-
-simpleExprWithParentheses
-    : '(' simpleExpr ')'
-    ;
-
-orderList
-    : orderExpression (',' orderExpression)*
-    ;
-
 orderExpression
     : expr direction?
     ;
 
-groupList
-    : expr (',' expr)*
-    ;
-
 channel
-    : 'FOR' 'CHANNEL' textStringNoLinebreak
+    : 'FOR' 'CHANNEL' string
     ;
 
 //----------------- Stored routines rules ------------------------------------------------------------------------------
@@ -3255,7 +2811,7 @@ elseStatement
     ;
 
 labeledBlock
-    : labelIdentifier ':' beginEndBlock (labelIdentifier)?
+    : name ':' beginEndBlock (name)?
     ;
 
 beginEndBlock
@@ -3263,7 +2819,7 @@ beginEndBlock
     ;
 
 labeledControl
-    : labelIdentifier ':' unlabeledControl (labelIdentifier)?
+    : name ':' unlabeledControl (name)?
     ;
 
 unlabeledControl
@@ -3296,15 +2852,15 @@ spDeclaration
     ;
 
 variableDeclaration
-    : 'DECLARE' identifierList dataType collate? ('DEFAULT' expr)?
+    : 'DECLARE' name (',' name)* dataType collate? ('DEFAULT' expr)?
     ;
 
 conditionDeclaration
-    : 'DECLARE' identifier 'CONDITION' 'FOR' spCondition
+    : 'DECLARE' name 'CONDITION' 'FOR' spCondition
     ;
 
 spCondition
-    : ulong_number
+    : number
     | sqlstate
     ;
 
@@ -3320,49 +2876,39 @@ handlerDeclaration
 
 handlerCondition
     : spCondition
-    | identifier
+    | name
     | 'SQLWARNING'
     | notRule 'FOUND'
     | 'SQLEXCEPTION'
     ;
 
 cursorDeclaration
-    : 'DECLARE' identifier 'CURSOR' 'FOR' select
+    : 'DECLARE' name 'CURSOR' 'FOR' select
     ;
 
 iterateStatement
-    : 'ITERATE' labelIdentifier
+    : 'ITERATE' name
     ;
 
 leaveStatement
-    : 'LEAVE' labelIdentifier
+    : 'LEAVE' name
     ;
 
 getDiagnosticsStatement
     : 'GET' ('CURRENT' | 'STACKED')? 'DIAGNOSTICS' (
         statementInformationItem (',' statementInformationItem)*
-        | 'CONDITION' signalAllowedExpr conditionInformationItem (
+        | 'CONDITION' qname conditionInformationItem (
             ',' conditionInformationItem
         )*
     )
     ;
 
-// Only a limited subset of expr is allowed in SIGNAL/RESIGNAL/CONDITIONS.
-signalAllowedExpr
-    : literal
-    | rvalueSystemOrUserVariable
-    | qualifiedIdentifier
-    ;
-
 statementInformationItem
-    : (userVariable | identifier) '=' ('NUMBER' | 'ROW_COUNT')
+    : name '=' ('NUMBER' | 'ROW_COUNT')
     ;
 
 conditionInformationItem
-    : (userVariable | identifier) '=' (
-        signalInformationItemName
-        | 'RETURNED_SQLSTATE'
-    )
+    : name '=' ( signalInformationItemName | 'RETURNED_SQLSTATE' )
     ;
 
 signalInformationItemName
@@ -3381,31 +2927,23 @@ signalInformationItemName
     ;
 
 signalStatement
-    : 'SIGNAL' (identifier | sqlstate) (
-        'SET' signalInformationItem (',' signalInformationItem)*
-    )?
-    ;
-
-resignalStatement
-    : 'RESIGNAL' (identifier | sqlstate)? (
-        'SET' signalInformationItem (',' signalInformationItem)*
-    )?
+    : ( 'SIGNAL' | 'RESIGNAL' ) (name | sqlstate) ( 'SET' signalInformationItem (',' signalInformationItem)* )?
     ;
 
 signalInformationItem
-    : signalInformationItemName '=' signalAllowedExpr
+    : signalInformationItemName '=' qname
     ;
 
 cursorOpen
-    : 'OPEN' identifier
+    : 'OPEN' name
     ;
 
 cursorClose
-    : 'CLOSE' identifier
+    : 'CLOSE' name
     ;
 
 cursorFetch
-    : 'FETCH' ('NEXT'? 'FROM')? identifier 'INTO' identifierList
+    : 'FETCH' ('NEXT'? 'FROM')? name 'INTO' name (',' name)*
     ;
 
 //----------------- Supplemental rules ---------------------------------------------------------------------------------
@@ -3417,7 +2955,7 @@ schedule
     ;
 
 columnDefinition
-    : identifier fieldDefinition checkOrReferences?
+    : name fieldDefinition checkOrReferences?
     ;
 
 checkOrReferences
@@ -3426,7 +2964,7 @@ checkOrReferences
     ;
 
 checkConstraint
-    : 'CHECK' exprWithParentheses
+    : 'CHECK' '(' expr ')'
     ;
 
 constraintEnforcement
@@ -3435,23 +2973,23 @@ constraintEnforcement
 
 tableConstraintDef
     : ('KEY' | 'INDEX') indexNameAndType? keyListWithExpression indexOption*
-    | 'FULLTEXT' keyOrIndex? (identifier)? keyListWithExpression fulltextIndexOption*
-    | 'SPATIAL' keyOrIndex? (identifier)? keyListWithExpression (commonIndexOption)*
+    | 'FULLTEXT' keyOrIndex? (name)? keyListWithExpression fulltextIndexOption*
+    | 'SPATIAL' keyOrIndex? (name)? keyListWithExpression (commonIndexOption)*
     | constraintName? (
         ('PRIMARY' 'KEY' | 'UNIQUE' keyOrIndex?) indexNameAndType? keyListWithExpression indexOption*
-        | 'FOREIGN' 'KEY' (identifier)? keyList references
+        | 'FOREIGN' 'KEY' (name)? keyList references
         | checkConstraint constraintEnforcement?
     )
     ;
 
 constraintName
-    : 'CONSTRAINT' identifier?
+    : 'CONSTRAINT' name?
     ;
 
 fieldDefinition
     : dataType (
         columnAttribute*
-        | collate? ('GENERATED' 'ALWAYS')? 'AS' exprWithParentheses (
+        | collate? ('GENERATED' 'ALWAYS')? 'AS' '(' expr ')' (
             'VIRTUAL'
             | 'STORED'
         )? columnAttribute*
@@ -3461,8 +2999,8 @@ fieldDefinition
 columnAttribute
     : 'NOT'? null
     | 'NOT' 'SECONDARY'
-    | 'DEFAULT' ( nowOrSignedLiteral | exprWithParentheses )
-    | 'ON' 'UPDATE' 'NOW' timeFunctionParameters?
+    | 'DEFAULT' ( nowOrSignedLiteral | '(' expr ')' )
+    | 'ON' 'UPDATE' 'NOW' ('(' integer? ')')?
     | 'AUTO_INCREMENT'
     | 'SERIAL' 'DEFAULT' 'VALUE'
     | 'PRIMARY'? 'KEY'
@@ -3471,11 +3009,11 @@ columnAttribute
     | collate
     | 'COLUMN_FORMAT' columnFormat
     | 'STORAGE' storageMedia
-    | 'SRID' real_ulong_number
+    | 'SRID' integer
     | constraintName? checkConstraint
     | constraintEnforcement
-    | 'ENGINE_ATTRIBUTE' '='? textStringLiteral
-    | 'SECONDARY_ENGINE_ATTRIBUTE' '='? textStringLiteral
+    | 'ENGINE_ATTRIBUTE' '='? string
+    | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
     | visibility
     ;
 
@@ -3497,18 +3035,11 @@ now
 
 nowOrSignedLiteral
     : now
-    | signedLiteralOrNull
+    | signedLiteral
     ;
 
-//gcolAttribute
-//    : 'UNIQUE' 'KEY'?
-//    | 'COMMENT' textString
-//    | notRule? 'NULL'
-//    | 'PRIMARY'? 'KEY'
-//    ;
-
 references
-    : 'REFERENCES' tableRef identifierListWithParentheses? (
+    : 'REFERENCES' qname ('(' name (',' name)* ')')? (
         'MATCH' ('FULL' | 'PARTIAL' | 'SIMPLE')
     )? (
         'ON' 'UPDATE' deleteOption (
@@ -3532,7 +3063,7 @@ keyList
     ;
 
 keyPart
-    : identifier fieldLength? direction?
+    : name fieldLength? direction?
     ;
 
 keyListWithExpression
@@ -3542,7 +3073,7 @@ keyListWithExpression
 keyPartOrExpression
     : // key_part_with_expression in sql_yacc.yy.
     keyPart
-    | exprWithParentheses direction?
+    | '(' expr ')' direction?
     ;
 
 indexType
@@ -3556,11 +3087,11 @@ indexOption
 
 // These options are common for all index types.
 commonIndexOption
-    : 'KEY_BLOCK_SIZE' '='? ulong_number
+    : 'KEY_BLOCK_SIZE' '='? number
     | 'COMMENT' textLiteral
     | visibility
-    | 'ENGINE_ATTRIBUTE' '='? textStringLiteral
-    | 'SECONDARY_ENGINE_ATTRIBUTE' '='? textStringLiteral
+    | 'ENGINE_ATTRIBUTE' '='? string
+    | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
     ;
 
 visibility
@@ -3574,7 +3105,7 @@ indexTypeClause
 
 fulltextIndexOption
     : commonIndexOption
-    | 'WITH' 'PARSER' identifier
+    | 'WITH' 'PARSER' name
     ;
 
 //dataTypeDefinition
@@ -3591,7 +3122,7 @@ dataType
         | 'MEDIUMINT'
         | 'BIGINT'
     ) fieldLength? fieldOptions?
-    | ('REAL' | 'DOUBLE' 'PRECISION'?) precision? fieldOptions?
+    | ('REAL' | 'DOUBLE' 'PRECISION'?) (floatOptions)? fieldOptions?
     | ('FLOAT' | 'DECIMAL' | 'NUMERIC' | 'FIXED') floatOptions? fieldOptions?
     | 'BIT' fieldLength?
     | ('BOOL' | 'BOOLEAN')
@@ -3621,8 +3152,8 @@ dataType
     | 'TEXT' fieldLength? charsetWithOptBinary?
     | 'MEDIUMTEXT' charsetWithOptBinary?
     | 'LONGTEXT' charsetWithOptBinary?
-    | 'ENUM' stringList charsetWithOptBinary?
-    | 'SET' stringList charsetWithOptBinary?
+    | 'ENUM' '(' string (',' string)* ')' charsetWithOptBinary?
+    | 'SET' '(' string (',' string)* ')' charsetWithOptBinary?
     | 'SERIAL'
     | 'JSON'
     | (
@@ -3648,7 +3179,7 @@ realType
     ;
 
 fieldLength
-    : '(' (real_ulong_number | DECIMAL_NUMBER) ')'
+    : '(' (integer | DECIMAL_NUMBER) ')'
     ;
 
 fieldOptions
@@ -3656,49 +3187,19 @@ fieldOptions
     ;
 
 charsetWithOptBinary
-    : ascii
-    | unicode
+    : ('ASCII' 'BINARY'? | 'BINARY' 'ASCII')
+    | ('UNICODE' 'BINARY'? | 'BINARY' 'UNICODE')
     | 'BYTE'
-    | charset charsetName 'BINARY'?
-    | 'BINARY' (charset charsetName)?
-    ;
-
-ascii
-    : 'ASCII' 'BINARY'?
-    | 'BINARY' 'ASCII'
-    ;
-
-unicode
-    : 'UNICODE' 'BINARY'?
-    | 'BINARY' 'UNICODE'
-    ;
-
-wsNumCodepoints
-    : '(' real_ulong_number ')'
+    | charset 'BINARY'?
+    | 'BINARY' (charset)?
     ;
 
 typeDatetimePrecision
     : '(' INT_NUMBER ')'
     ;
 
-charsetName
-    : textOrIdentifier
-    | 'BINARY'
-    | 'DEFAULT'
-    ;
-
-collationName
-    : textOrIdentifier
-    | 'DEFAULT'
-    | 'BINARY'
-    ;
-
-createTableOptions
-    : createTableOption (','? createTableOption)*
-    ;
-
 createTableOptionsEtc
-    : createTableOptions createPartitioningEtc?
+    : createTableOption (','? createTableOption)* createPartitioningEtc?
     | createPartitioningEtc
     ;
 
@@ -3708,99 +3209,80 @@ createPartitioningEtc
     ;
 
 createTableOption
-    : // In the order as they appear in the server grammar.
-    'ENGINE' '='? textOrIdentifier
-    | 'SECONDARY_ENGINE' equal? (
-        'NULL'
-        | textOrIdentifier
-    )
-    | 'MAX_ROWS' '='? ulonglongNumber
-    | 'MIN_ROWS' '='? ulonglongNumber
-    | 'AVG_ROW_LENGTH' '='? ulonglongNumber
-    | 'PASSWORD' '='? textStringLiteral
-    | 'COMMENT' '='? textStringLiteral
-    | 'COMPRESSION' '='? textString
-    | 'ENCRYPTION' '='? textString
-    | 'AUTO_INCREMENT' '='? ulonglongNumber
+    : 'ENGINE' '='? name
+    | 'SECONDARY_ENGINE' equal? ( 'NULL' | name )
+    | 'MAX_ROWS' '='? number
+    | 'MIN_ROWS' '='? number
+    | 'AVG_ROW_LENGTH' '='? number
+    | 'PASSWORD' '='? string
+    | 'COMMENT' '='? string
+    | 'COMPRESSION' '='? string
+    | 'ENCRYPTION' '='? string
+    | 'AUTO_INCREMENT' '='? number
     | 'PACK_KEYS' '='? ternaryOption
-    | (
-        'STATS_AUTO_RECALC'
-        | 'STATS_PERSISTENT'
-        | 'STATS_SAMPLE_PAGES'
-    ) '='? ternaryOption
-    | ('CHECKSUM' | 'TABLE_CHECKSUM') '='? ulong_number
-    | 'DELAY_KEY_WRITE' '='? ulong_number
-    | 'ROW_FORMAT' '='? (
-        'DEFAULT'
-        | 'DYNAMIC'
-        | 'FIXED'
-        | 'COMPRESSED'
-        | 'REDUNDANT'
-        | 'COMPACT'
-    )
-    | 'UNION' '='? '(' tableRefList ')'
+    | ( 'STATS_AUTO_RECALC' | 'STATS_PERSISTENT' | 'STATS_SAMPLE_PAGES' ) '='? ternaryOption
+    | ('CHECKSUM' | 'TABLE_CHECKSUM') '='? number
+    | 'DELAY_KEY_WRITE' '='? number
+    | 'ROW_FORMAT' '='? ( 'DEFAULT' | 'DYNAMIC' | 'FIXED' | 'COMPRESSED' | 'REDUNDANT' | 'COMPACT' )
+    | 'UNION' '='? '(' qnames ')'
     | defaultCharset
     | defaultCollation
-    | 'INSERT_METHOD' '='? (
-        'NO'
-        | 'FIRST'
-        | 'LAST'
-    )
-    | 'DATA' 'DIRECTORY' '='? textString
-    | 'INDEX' 'DIRECTORY' '='? textString
-    | 'TABLESPACE' '='? identifier
+    | 'INSERT_METHOD' '='? ( 'NO' | 'FIRST' | 'LAST' )
+    | 'DATA' 'DIRECTORY' '='? string
+    | 'INDEX' 'DIRECTORY' '='? string
+    | 'TABLESPACE' '='? name
     | 'STORAGE' ('DISK' | 'MEMORY')
-    | 'CONNECTION' '='? textString
-    | 'KEY_BLOCK_SIZE' '='? ulonglongNumber
+    | 'CONNECTION' '='? string
+    | 'KEY_BLOCK_SIZE' '='? number
     | 'START' 'TRANSACTION'
-    | 'ENGINE_ATTRIBUTE' '='? textStringLiteral
-    | 'SECONDARY_ENGINE_ATTRIBUTE' '='? textStringLiteral
+    | 'ENGINE_ATTRIBUTE' '='? string
+    | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
     | tsOptionAutoextendSize
     ;
 
 ternaryOption
-    : ulong_number
+    : number
     | 'DEFAULT'
     ;
 
 defaultCollation
-    : 'DEFAULT'? 'COLLATE' '='? collationName
+    : 'DEFAULT'? 'COLLATE' '='? name
     ;
 
 defaultEncryption
-    : 'DEFAULT'? 'ENCRYPTION' '='? textStringLiteral
+    : 'DEFAULT'? 'ENCRYPTION' '='? string
     ;
 
 defaultCharset
-    : 'DEFAULT'? charset '='? charsetName
+    : 'DEFAULT'? charset '='? name
     ;
 
 // Partition rules for CREATE/ALTER TABLE.
 partitionClause
     : 'PARTITION' 'BY' partitionTypeDef (
-        'PARTITIONS' real_ulong_number
+        'PARTITIONS' integer
     )? subPartitions? partitionDefinitions?
     ;
 
 partitionTypeDef
-    : 'LINEAR'? 'KEY' partitionKeyAlgorithm? '(' identifierList? ')'
+    : 'LINEAR'? 'KEY' partitionKeyAlgorithm? '(' (name (',' name)*)? ')'
     | 'LINEAR'? 'HASH' '(' bitExpr ')'
     | ('RANGE' | 'LIST') (
         '(' bitExpr ')'
-        | 'COLUMNS' '(' identifierList? ')'
+        | 'COLUMNS' '(' (name (',' name)*)? ')'
     )
     ;
 
 subPartitions
     : 'SUBPARTITION' 'BY' 'LINEAR'? (
         'HASH' '(' bitExpr ')'
-        | 'KEY' partitionKeyAlgorithm? identifierListWithParentheses
-    ) ('SUBPARTITIONS' real_ulong_number)?
+        | 'KEY' partitionKeyAlgorithm? '(' name (',' name)* ')'
+    ) ('SUBPARTITIONS' integer)?
     ;
 
 partitionKeyAlgorithm
     : // Actually only 1 and 2 are allowed. Needs a semantic check.
-    'ALGORITHM' '=' real_ulong_number
+    'ALGORITHM' '=' integer
     ;
 
 partitionDefinitions
@@ -3808,7 +3290,7 @@ partitionDefinitions
     ;
 
 partitionDefinition
-    : 'PARTITION' identifier (
+    : 'PARTITION' name (
         'VALUES' 'LESS' 'THAN' (
             partitionValueItemListParen
             | 'MAXVALUE'
@@ -3827,16 +3309,16 @@ partitionValuesIn
     ;
 
 partitionOption
-    : 'TABLESPACE' '='? identifier
-    | 'STORAGE'? 'ENGINE' '='? textOrIdentifier
-    | 'NODEGROUP' '='? real_ulong_number
-    | ('MAX_ROWS' | 'MIN_ROWS') '='? real_ulong_number
+    : 'TABLESPACE' '='? name
+    | 'STORAGE'? 'ENGINE' '='? name
+    | 'NODEGROUP' '='? integer
+    | ('MAX_ROWS' | 'MIN_ROWS') '='? integer
     | ('DATA' | 'INDEX') 'DIRECTORY' '='? textLiteral
     | 'COMMENT' '='? textLiteral
     ;
 
 subpartitionDefinition
-    : 'SUBPARTITION' textOrIdentifier partitionOption*
+    : 'SUBPARTITION' name partitionOption*
     ;
 
 partitionValueItemListParen
@@ -3856,18 +3338,6 @@ ifExists
     : 'IF' 'EXISTS'
     ;
 
-ifExistsIdentifier
-    : ifExists persistedVariableIdentifier
-    ;
-
-persistedVariableIdentifier
-    : identifier
-    | (
-        qualifiedIdentifier
-        | 'DEFAULT' dotIdentifier
-    )
-    ;
-
 ifNotExists
     : 'IF' notRule 'EXISTS'
     ;
@@ -3881,11 +3351,11 @@ procedureParameter
     ;
 
 functionParameter
-    : identifier typeWithOptCollate
+    : name typeWithOptCollate
     ;
 
 collate
-    : 'COLLATE' collationName
+    : 'COLLATE' name
     ;
 
 typeWithOptCollate
@@ -3893,11 +3363,7 @@ typeWithOptCollate
     ;
 
 schemaIdentifierPair
-    : '(' identifier ',' identifier ')'
-    ;
-
-viewRefList
-    : viewRef (',' viewRef)*
+    : '(' name ',' name ')'
     ;
 
 updateList
@@ -3905,11 +3371,7 @@ updateList
     ;
 
 updateElement
-    : fieldIdentifier '=' (expr | 'DEFAULT')
-    ;
-
-charsetClause
-    : charset charsetName
+    : qname '=' (expr | 'DEFAULT')
     ;
 
 fieldsClause
@@ -3917,9 +3379,9 @@ fieldsClause
     ;
 
 fieldTerm
-    : 'TERMINATED' 'BY' textString
-    | 'OPTIONALLY'? 'ENCLOSED' 'BY' textString
-    | 'ESCAPED' 'BY' textString
+    : 'TERMINATED' 'BY' string
+    | 'OPTIONALLY'? 'ENCLOSED' 'BY' string
+    | 'ESCAPED' 'BY' string
     ;
 
 linesClause
@@ -3927,7 +3389,7 @@ linesClause
     ;
 
 lineTerm
-    : ('TERMINATED' | 'STARTING') 'BY' textString
+    : ('TERMINATED' | 'STARTING') 'BY' string
     ;
 
 userList
@@ -3939,11 +3401,11 @@ createUserList
     ;
 
 createUser
-    : user (
-        identification createUserWithMfa?
+    : user
+        ( identification createUserWithMfa?
         | identifiedWithPlugin initialAuth?
         | createUserWithMfa
-    )?
+        )?
     ;
 
 createUserWithMfa
@@ -3960,7 +3422,7 @@ identification
     ;
 
 identifiedByPassword
-    : 'IDENTIFIED' 'BY' textStringLiteral
+    : 'IDENTIFIED' 'BY' string
     ;
 
 identifiedByRandomPassword
@@ -3968,19 +3430,19 @@ identifiedByRandomPassword
     ;
 
 identifiedWithPlugin
-    : 'IDENTIFIED' 'WITH' textOrIdentifier
+    : 'IDENTIFIED' 'WITH' name
     ;
 
 identifiedWithPluginAsAuth
-    : 'IDENTIFIED' 'WITH' textOrIdentifier 'AS' textStringHash
+    : 'IDENTIFIED' 'WITH' name 'AS' textStringHash
     ;
 
 identifiedWithPluginByPassword
-    : 'IDENTIFIED' 'WITH' textOrIdentifier 'BY' textStringLiteral
+    : 'IDENTIFIED' 'WITH' name 'BY' string
     ;
 
 identifiedWithPluginByRandomPassword
-    : 'IDENTIFIED' 'WITH' textOrIdentifier 'BY' 'RANDOM' 'PASSWORD'
+    : 'IDENTIFIED' 'WITH' name 'BY' 'RANDOM' 'PASSWORD'
     ;
 
 initialAuth
@@ -4006,29 +3468,28 @@ userRegistration
     ;
 
 factor
-    : numLiteral 'FACTOR'
+    : number 'FACTOR'
     ;
 
 replacePassword
-    : 'REPLACE' textString
+    : 'REPLACE' string
     ;
 
-userIdentifierOrText
-    : textOrIdentifier userVariable?
+userName
+    : name name?
     ;
 
 user
-    : userIdentifierOrText
+    : userName
     | 'CURRENT_USER' ('(' ')')?
     ;
 
 likeClause
-    : 'LIKE' textStringLiteral
+    : 'LIKE' string
     ;
 
 likeOrWhere
-    : // opt_wild_or_where in sql_yacc.yy
-    likeClause
+    : likeClause
     | where
     ;
 
@@ -4043,217 +3504,85 @@ noWriteToBinLog
     ;
 
 usePartition
-    : 'PARTITION' identifierListWithParentheses
+    : 'PARTITION' '(' name (',' name)* ')'
     ;
 
-//----------------- Object names and references ------------------------------------------------------------------------
-
-// For each object we have at least 2 rules here:
-// 1) The name when creating that object.
-// 2) The name when used to reference it from other rules.
-//
-// Sometimes we need additional reference rules with different form, depending on the place such a reference is used.
-
-// A name for a field (column/index). Can be qualified with the current schema + table (although it's not a reference).
-fieldIdentifier
-    : dotIdentifier
-    | qualifiedIdentifier dotIdentifier?
-    ;
-
-// A reference to a column of the object we are working on.
 columns
-    : // column_list (+ parentheses) + opt_derived_column_list in sql_yacc.yy
-    '(' identifier (',' identifier)* ')'
+    : '(' name (',' name)* ')'
     ;
 
 insertIdentifier
-    : fieldIdentifier
+    : qname
     | tableWild
     ;
 
 tableWild
-    : identifier '.' (identifier '.')? '*'
-    ;
-
-viewName
-    : qualifiedIdentifier
-    | dotIdentifier
-    ;
-
-viewRef
-    : qualifiedIdentifier
-    | dotIdentifier
-    ;
-
-udfName
-    : // UDFs are referenced at the same places as any other function. So, no dedicated *_ref here.
-    identifier
-    ;
-
-tableName
-    : qualifiedIdentifier
-    | dotIdentifier
-    ;
-
-filterTableRef
-    : // Always qualified.
-    identifier dotIdentifier
+    : name '.' (name '.')? '*'
     ;
 
 tableRefWithWildcard
-    : identifier (
-        '.' '*'
-        | dotIdentifier ('.' '*')?
-    )?
+    : qname
     ;
 
-tableRef
-    : qualifiedIdentifier
-    | dotIdentifier
-    ;
-
-tableRefList
-    : tableRef (',' tableRef)*
+qnames
+    : qname (',' qname)*
     ;
 
 tableAliasRefList
     : tableRefWithWildcard (',' tableRefWithWildcard)*
     ;
 
-labelIdentifier
-    : pureIdentifier
-    | labelKeyword
+qname
+    : '.'? name ( '.' name ( '.' name )? )? // ('.' '*')?
     ;
 
-roleIdentifier
-    : pureIdentifier
-    | roleKeyword
-    ;
-
-//----------------- Common basic rules ---------------------------------------------------------------------------------
-
-// Identifiers excluding keywords (except if they are quoted). IDENT_sys in sql_yacc.yy.
-pureIdentifier
-    : IDENTIFIER
-    | BACK_TICK_QUOTED_ID
-    | DOUBLE_QUOTED_TEXT
-    ;
-
-// Identifiers including a certain set of keywords, which are allowed also if not quoted.
-// ident in sql_yacc.yy
-identifier
-    : pureIdentifier
-    | identifierKeyword
-    ;
-
-identifierList
-    : // ident_string_list in sql_yacc.yy.
-    identifier (',' identifier)*
-    ;
-
-identifierListWithParentheses
-    : '(' identifierList ')'
-    ;
-
-qualifiedIdentifier
-    : identifier dotIdentifier?
-    ;
-
-simpleIdentifier
-    : // simple_ident + simple_ident_q
-    identifier (dotIdentifier dotIdentifier?)?
-    ;
-
-// This rule encapsulates the frequently used dot + identifier sequence, which also requires a special
-// treatment in the lexer. See there in the DOT_IDENTIFIER rule.
-dotIdentifier
-    : '.' identifier
-    ;
-
-ulong_number
+integer
     : INT_NUMBER
     | HEX_NUMBER
-//    | LONG_NUMBER
-//    | ULONGLONG_NUMBER
-    | DECIMAL_NUMBER
-    | FLOAT_NUMBER
-    ;
-
-real_ulong_number
-    : INT_NUMBER
-    | HEX_NUMBER
-//    | LONG_NUMBER
-//    | ULONGLONG_NUMBER
-    ;
-
-ulonglongNumber
-    : INT_NUMBER
-//    | LONG_NUMBER
-//    | ULONGLONG_NUMBER
-    | DECIMAL_NUMBER
-    | FLOAT_NUMBER
     ;
 
 signedLiteral
     : literal
-    | '+' ulong_number
-    | '-' ulong_number
-    ;
-
-signedLiteralOrNull
-    : signedLiteral
-//    | 'NULL'
+    | '+' number
+    | '-' number
     ;
 
 literal
     : textLiteral
-    | numLiteral
+    | number
     | temporalLiteral
     | null
     | boolLiteral
-    | UNDERSCORE_CHARSET? (HEX_NUMBER | BIN_NUMBER)
+//    | UNDERSCORE_CHARSET? (HEX_NUMBER | BIN_NUMBER)
     ;
 
-stringList
-    : '(' textString (',' textString)* ')'
-    ;
-
-// TEXT_STRING_sys + TEXT_STRING_literal + TEXT_STRING_filesystem + TEXT_STRING + TEXT_STRING_password +
-// TEXT_STRING_validated in sql_yacc.yy.
-textStringLiteral
-    : SINGLE_QUOTED_TEXT
-    | DOUBLE_QUOTED_TEXT
-    ;
-
-textString
-    : textStringLiteral
+string
+    : STRING+
+    | NCHAR_TEXT
     | HEX_NUMBER
     | BIN_NUMBER
+//    | DOUBLE_QUOTED_TEXT
     ;
 
 textStringHash
-    : textStringLiteral
+    : string
     | HEX_NUMBER
     ;
 
 textLiteral
-    : (UNDERSCORE_CHARSET? textStringLiteral | NCHAR_TEXT) textStringLiteral*
+//    : (UNDERSCORE_CHARSET? textStringLiteral | NCHAR_TEXT) textStringLiteral*
+    : NCHAR_TEXT string+
     ;
 
-// A special variant of a text string that must not contain a linebreak (TEXT_STRING_sys_nonewline in sql_yacc.yy).
-// Check validity in semantic phase.
-textStringNoLinebreak
-    : textStringLiteral
+strings
+    : string (',' string)*
     ;
 
-textStringLiteralList
-    : textStringLiteral (',' textStringLiteral)*
-    ;
-
-numLiteral
+number
     : INT_NUMBER
     | DECIMAL_NUMBER
-    | FLOAT_NUMBER
+    | HEX_NUMBER
+//    | FLOAT_NUMBER
     ;
 
 boolLiteral
@@ -4265,41 +3594,26 @@ boolLiteral
 null
     : 'NULL' | '\\N' ;
 
-// int64Literal if for unsigned exact integer literals in a range of [0 .. 2^64-1].
-
 temporalLiteral
-    : 'DATE' SINGLE_QUOTED_TEXT
-    | 'TIME' SINGLE_QUOTED_TEXT
-    | 'TIMESTAMP' SINGLE_QUOTED_TEXT
+    : 'DATE' STRING
+    | 'TIME' STRING
+    | 'TIMESTAMP' STRING
     ;
 
 floatOptions
     : fieldLength
-    | precision
+    | '(' INT_NUMBER ',' INT_NUMBER ')'
     ;
 
-precision
-    : '(' INT_NUMBER ',' INT_NUMBER ')'
-    ;
-
-textOrIdentifier
-    : identifier
-    | textStringLiteral
-    ;
-
-lValueIdentifier
-    : pureIdentifier
-    | lValueKeyword
-    ;
-
-roleIdentifierOrText
-    : roleIdentifier
-    | textStringLiteral
+name
+    : IDENTIFIER
+    | keyword
+    | string
     ;
 
 sizeNumber
-    : real_ulong_number
-    | pureIdentifier // Something like 10G. Semantic check needed for validity.
+    : integer
+    | IDENTIFIER // Something like 10G. Semantic check needed for validity.
     ;
 
 equal
@@ -4307,7 +3621,7 @@ equal
     | ':='
     ;
 
-optionType
+scope
     : 'PERSIST'
     | 'PERSIST_ONLY'
     | 'GLOBAL'
@@ -4315,1062 +3629,770 @@ optionType
     | 'SESSION'
     ;
 
-rvalueSystemVariableType
-    : 'GLOBAL' '.'
-    | 'LOCAL' '.'
-    | 'SESSION' '.'
+
+
+keyword
+    : 	 'ACCOUNT'
+      	| 'ACTION'
+      	| 'ACTIVE'
+      	| 'ADD'
+      	| 'ADDDATE'
+      	| 'ADMIN'
+      	| 'AFTER'
+      	| 'AGAINST'
+      	| 'AGGREGATE'
+      	| 'ALGORITHM'
+      	| 'ALL'
+      	| 'ALTER'
+      	| 'ALWAYS'
+      	| 'ANALYZE'
+      	| 'AND'
+      	| 'ANY'
+      	| 'ARRAY'
+      	| 'AS'
+      	| 'ASC'
+      	| 'ASCII'
+      	| 'ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS'
+      	| 'AT'
+      	| 'ATTRIBUTE'
+      	| 'AUTHENTICATION'
+      	| 'AUTO'
+      	| 'AUTO_INCREMENT'
+      	| 'AUTOEXTEND_SIZE'
+      	| 'AVG'
+      	| 'AVG_ROW_LENGTH'
+      	| 'BACKUP'
+      	| 'BEFORE'
+      	| 'BEGIN'
+      	| 'BERNOULLI'
+      	| 'BETWEEN'
+      	| 'BIGINT'
+      	| 'BINARY'
+      	| 'BINLOG'
+      	| 'BIT'
+      	| 'BIT_AND'
+      	| 'BIT_OR'
+      	| 'BIT_XOR'
+      	| 'BLOB'
+      	| 'BLOCK'
+      	| 'BOOL'
+      	| 'BOOLEAN'
+      	| 'BOTH'
+      	| 'BTREE'
+      	| 'BUCKETS'
+      	| 'BULK'
+      	| 'BY'
+      	| 'BYTE'
+      	| 'CACHE'
+      	| 'CALL'
+      	| 'CASCADE'
+      	| 'CASCADED'
+      	| 'CASE'
+      	| 'CAST'
+      	| 'CATALOG_NAME'
+      	| 'CHAIN'
+      	| 'CHALLENGE_RESPONSE'
+      	| 'CHANGE'
+      	| 'CHANGED'
+      	| 'CHANNEL'
+      	| 'CHAR'
+      	| 'CHARACTER'
+      	| 'CHARSET'
+      	| 'CHECK'
+      	| 'CHECKSUM'
+      	| 'CIPHER'
+      	| 'CLASS_ORIGIN'
+      	| 'CLIENT'
+      	| 'CLONE'
+      	| 'CLOSE'
+      	| 'COALESCE'
+      	| 'CODE'
+      	| 'COLLATE'
+      	| 'COLLATION'
+      	| 'COLUMN'
+      	| 'COLUMN_FORMAT'
+      	| 'COLUMN_NAME'
+      	| 'COLUMNS'
+      	| 'COMMENT'
+      	| 'COMMIT'
+      	| 'COMMITTED'
+      	| 'COMPACT'
+      	| 'COMPLETION'
+      	| 'COMPONENT'
+      	| 'COMPRESSED'
+      	| 'COMPRESSION'
+      	| 'CONCAT_PIPES'
+      	| 'CONCURRENT'
+      	| 'CONDITION'
+      	| 'CONNECTION'
+      	| 'CONSISTENT'
+      	| 'CONSTRAINT'
+      	| 'CONSTRAINT_CATALOG'
+      	| 'CONSTRAINT_NAME'
+      	| 'CONSTRAINT_SCHEMA'
+      	| 'CONTAINS'
+      	| 'CONTEXT'
+      	| 'CONTINUE'
+      	| 'CONVERT'
+      	| 'COUNT'
+      	| 'CPU'
+      	| 'CREATE'
+      	| 'CROSS'
+      	| 'CUBE'
+      	| 'CUME_DIST'
+      	| 'CURDATE'
+      	| 'CURRENT'
+      	| 'CURRENT_USER'
+      	| 'CURSOR'
+      	| 'CURSOR_NAME'
+      	| 'CURTIME'
+      	| 'DATA'
+      	| 'DATABASE'
+      	| 'DATABASES'
+      	| 'DATAFILE'
+      	| 'DATE'
+      	| 'DATE_ADD'
+      	| 'DATE_SUB'
+      	| 'DATETIME'
+      	| 'DAY'
+      	| 'DAY_HOUR'
+      	| 'DAY_MICROSECOND'
+      	| 'DAY_MINUTE'
+      	| 'DAY_SECOND'
+      	| 'DEALLOCATE'
+      	| 'DECIMAL'
+      	| 'DECLARE'
+      	| 'DEFAULT'
+      	| 'DEFAULT_AUTH'
+      	| 'DEFINER'
+      	| 'DEFINITION'
+      	| 'DELAY_KEY_WRITE'
+      	| 'DELAYED'
+      	| 'DELETE'
+      	| 'DENSE_RANK'
+      	| 'DESC'
+      	| 'DESCRIBE'
+      	| 'DESCRIPTION'
+      	| 'DETERMINISTIC'
+      	| 'DIAGNOSTICS'
+      	| 'DIRECTORY'
+      	| 'DISABLE'
+      	| 'DISCARD'
+      	| 'DISK'
+      	| 'DISTINCT'
+      	| 'DISTINCTROW'
+      	| 'DIV'
+      	| 'DO'
+      	| 'DOUBLE'
+      	| 'DROP'
+      	| 'DUAL'
+      	| 'DUMPFILE'
+      	| 'DUPLICATE'
+      	| 'DYNAMIC'
+      	| 'EACH'
+      	| 'ELSE'
+      	| 'ELSEIF'
+      	| 'EMPTY'
+      	| 'ENABLE'
+      	| 'ENCLOSED'
+      	| 'ENCRYPTION'
+      	| 'END'
+      	| 'ENDS'
+      	| 'ENFORCED'
+      	| 'ENGINE'
+      	| 'ENGINE_ATTRIBUTE'
+      	| 'ENGINES'
+      	| 'ENUM'
+      	| 'ERROR'
+      	| 'ERRORS'
+      	| 'ESCAPE'
+      	| 'ESCAPED'
+      	| 'EVENT'
+      	| 'EVENTS'
+      	| 'EVERY'
+      	| 'EXCEPT'
+      	| 'EXCHANGE'
+      	| 'EXCLUDE'
+      	| 'EXECUTE'
+      	| 'EXISTS'
+      	| 'EXIT'
+      	| 'EXPANSION'
+      	| 'EXPIRE'
+      	| 'EXPLAIN'
+      	| 'EXPORT'
+      	| 'EXTENDED'
+      	| 'EXTENT_SIZE'
+      	| 'EXTRACT'
+      	| 'FACTOR'
+      	| 'FAILED_LOGIN_ATTEMPTS'
+      	| 'FALSE'
+      	| 'FAST'
+      	| 'FAULTS'
+      	| 'FETCH'
+      	| 'FILE'
+      	| 'FILE_BLOCK_SIZE'
+      	| 'FILTER'
+      	| 'FINISH'
+      	| 'FIRST'
+      	| 'FIRST_VALUE'
+      	| 'FIXED'
+      	| 'FLOAT'
+      	| 'FLUSH'
+      	| 'FOLLOWING'
+      	| 'FOLLOWS'
+      	| 'FOR'
+      	| 'FORCE'
+      	| 'FOREIGN'
+      	| 'FORMAT'
+      	| 'FOUND'
+      	| 'FROM'
+      	| 'FULL'
+      	| 'FULLTEXT'
+      	| 'FUNCTION'
+      	| 'GENERAL'
+      	| 'GENERATE'
+      	| 'GENERATED'
+      	| 'GEOMETRY'
+      	| 'GEOMETRYCOLLECTION'
+      	| 'GET'
+      	| 'GET_FORMAT'
+      	| 'GET_MASTER_PUBLIC_KEY'
+      	| 'GET_SOURCE_PUBLIC_KEY'
+      	| 'GLOBAL'
+      	| 'GRANT'
+      	| 'GRANTS'
+      	| 'GROUP'
+      	| 'GROUP_CONCAT'
+      	| 'GROUP_REPLICATION'
+      	| 'GROUPING'
+      	| 'GROUPS'
+      	| 'GTID_ONLY'
+      	| 'GTIDS'
+      	| 'HANDLER'
+      	| 'HASH'
+      	| 'HAVING'
+      	| 'HELP'
+      	| 'HIGH_PRIORITY'
+      	| 'HISTOGRAM'
+      	| 'HISTORY'
+      	| 'HOST'
+      	| 'HOSTS'
+      	| 'HOUR'
+      	| 'HOUR_MICROSECOND'
+      	| 'HOUR_MINUTE'
+      	| 'HOUR_SECOND'
+      	| 'IDENTIFIED'
+      	| 'IF'
+      	| 'IGNORE'
+      	| 'IGNORE_SERVER_IDS'
+      	| 'IMPORT'
+      	| 'IN'
+      	| 'INACTIVE'
+      	| 'INDEX'
+      	| 'INDEXES'
+      	| 'INFILE'
+      	| 'INITIAL'
+      	| 'INITIAL_SIZE'
+      	| 'INITIATE'
+      	| 'INNER'
+      	| 'INOUT'
+      	| 'INSERT'
+      	| 'INSERT_METHOD'
+      	| 'INSTALL'
+      	| 'INSTANCE'
+      	| 'INT'
+      	| 'INTERSECT'
+      	| 'INTERVAL'
+      	| 'INTO'
+      	| 'INVISIBLE'
+      	| 'INVOKER'
+      	| 'IO'
+      	| 'IPC'
+      	| 'IS'
+      	| 'ISOLATION'
+      	| 'ISSUER'
+      	| 'ITERATE'
+      	| 'JOIN'
+      	| 'JSON'
+      	| 'JSON_ARRAYAGG'
+      	| 'JSON_OBJECTAGG'
+      	| 'JSON_TABLE'
+      	| 'JSON_VALUE'
+      	| 'KEY'
+      	| 'KEY_BLOCK_SIZE'
+      	| 'KEYRING'
+      	| 'KEYS'
+      	| 'KILL'
+      	| 'LAG'
+      	| 'LANGUAGE'
+      	| 'LAST'
+      	| 'LAST_VALUE'
+      	| 'LATERAL'
+      	| 'LEAD'
+      	| 'LEADING'
+      	| 'LEAVE'
+      	| 'LEAVES'
+      	| 'LEFT'
+      	| 'LESS'
+      	| 'LEVEL'
+      	| 'LIKE'
+      	| 'LIMIT'
+      	| 'LINEAR'
+      	| 'LINES'
+      	| 'LINESTRING'
+      	| 'LIST'
+      	| 'LOAD'
+      	| 'LOCAL'
+      	| 'LOCK'
+      	| 'LOCKED'
+      	| 'LOG'
+      	| 'LOGFILE'
+      	| 'LOGS'
+      	| 'LONG'
+      	| 'LONGBLOB'
+      	| 'LONGTEXT'
+      	| 'LOOP'
+      	| 'LOW_PRIORITY'
+      	| 'MANUAL'
+      	| 'MASTER'
+      	| 'MASTER_AUTO_POSITION'
+      	| 'MASTER_BIND'
+      	| 'MASTER_COMPRESSION_ALGORITHM'
+      	| 'MASTER_CONNECT_RETRY'
+      	| 'MASTER_DELAY'
+      	| 'MASTER_HEARTBEAT_PERIOD'
+      	| 'MASTER_HOST'
+      	| 'MASTER_LOG_FILE'
+      	| 'MASTER_LOG_POS'
+      	| 'MASTER_PASSWORD'
+      	| 'MASTER_PORT'
+      	| 'MASTER_PUBLIC_KEY_PATH'
+      	| 'MASTER_RETRY_COUNT'
+      	| 'MASTER_SSL'
+      	| 'MASTER_SSL_CA'
+      	| 'MASTER_SSL_CAPATH'
+      	| 'MASTER_SSL_CERT'
+      	| 'MASTER_SSL_CIPHER'
+      	| 'MASTER_SSL_CRL'
+      	| 'MASTER_SSL_CRLPATH'
+      	| 'MASTER_SSL_KEY'
+      	| 'MASTER_SSL_VERIFY_SERVER_CERT'
+      	| 'MASTER_TLS_CIPHERSUITES'
+      	| 'MASTER_TLS_VERSION'
+      	| 'MASTER_USER'
+      	| 'MASTER_ZSTD_COMPRESSION_LEVEL'
+      	| 'MATCH'
+      	| 'MAX'
+      	| 'MAX_CONNECTIONS_PER_HOUR'
+      	| 'MAX_QUERIES_PER_HOUR'
+      	| 'MAX_ROWS'
+      	| 'MAX_SIZE'
+      	| 'MAX_UPDATES_PER_HOUR'
+      	| 'MAX_USER_CONNECTIONS'
+      	| 'MAXVALUE'
+      	| 'MEDIUM'
+      	| 'MEDIUMBLOB'
+      	| 'MEDIUMINT'
+      	| 'MEDIUMTEXT'
+      	| 'MEMBER'
+      	| 'MEMORY'
+      	| 'MERGE'
+      	| 'MESSAGE_TEXT'
+      	| 'MICROSECOND'
+      	| 'MIGRATE'
+      	| 'MIN'
+      	| 'MIN_ROWS'
+      	| 'MINUTE'
+      	| 'MINUTE_MICROSECOND'
+      	| 'MINUTE_SECOND'
+      	| 'MOD'
+      	| 'MODE'
+      	| 'MODIFIES'
+      	| 'MODIFY'
+      	| 'MONTH'
+      	| 'MULTILINESTRING'
+      	| 'MULTIPOINT'
+      	| 'MULTIPOLYGON'
+      	| 'MUTEX'
+      	| 'MYSQL_ERRNO'
+      	| 'NAME'
+      	| 'NAMES'
+      	| 'NATIONAL'
+      	| 'NATURAL'
+      	| 'NCHAR'
+      	| 'NESTED'
+      	| 'NETWORK_NAMESPACE'
+      	| 'NEVER'
+      	| 'NEXT'
+      	| 'NO'
+      	| 'NO_WAIT'
+      	| 'NO_WRITE_TO_BINLOG'
+      	| 'NODEGROUP'
+      	| 'NONE'
+      	| 'NOT'
+      	| 'NOT2'
+      	| 'NOW'
+      	| 'NOWAIT'
+      	| 'NTH_VALUE'
+      	| 'NTILE'
+      	| 'NULL'
+      	| 'NULLS'
+      	| 'NUMBER'
+      	| 'NUMERIC'
+      	| 'NVARCHAR'
+      	| 'OF'
+      	| 'OFF'
+      	| 'OFFLINE'
+      	| 'OFFSET'
+      	| 'OJ'
+      	| 'OLD'
+      	| 'ON'
+      	| 'ONE'
+      	| 'ONLINE'
+      	| 'ONLY'
+      	| 'OPEN'
+      	| 'OPTIMIZE'
+      	| 'OPTIMIZER_COSTS'
+      	| 'OPTION'
+      	| 'OPTIONAL'
+      	| 'OPTIONALLY'
+      	| 'OPTIONS'
+      	| 'OR'
+      	| 'ORDER'
+      	| 'ORDINALITY'
+      	| 'ORGANIZATION'
+      	| 'OTHERS'
+      	| 'OUT'
+      	| 'OUTER'
+      	| 'OUTFILE'
+      	| 'OVER'
+      	| 'OWNER'
+      	| 'PACK_KEYS'
+      	| 'PAGE'
+      	| 'PARALLEL'
+      	| 'PARSE_TREE'
+      	| 'PARSER'
+      	| 'PARTIAL'
+      	| 'PARTITION'
+      	| 'PARTITIONING'
+      	| 'PARTITIONS'
+      	| 'PASSWORD'
+      	| 'PASSWORD_LOCK_TIME'
+      	| 'PATH'
+      	| 'PERCENT_RANK'
+      	| 'PERSIST'
+      	| 'PERSIST_ONLY'
+      	| 'PHASE'
+      	| 'PLUGIN'
+      	| 'PLUGIN_DIR'
+      	| 'PLUGINS'
+      	| 'POINT'
+      	| 'POLYGON'
+      	| 'PORT'
+      	| 'POSITION'
+      	| 'PRECEDES'
+      	| 'PRECEDING'
+      	| 'PRECISION'
+      	| 'PREPARE'
+      	| 'PRESERVE'
+      	| 'PREV'
+      	| 'PRIMARY'
+      	| 'PRIVILEGE_CHECKS_USER'
+      	| 'PRIVILEGES'
+      	| 'PROCEDURE'
+      	| 'PROCESS'
+      	| 'PROCESSLIST'
+      	| 'PROFILE'
+      	| 'PROFILES'
+      	| 'PROXY'
+      	| 'PURGE'
+      	| 'QUALIFY'
+      	| 'QUARTER'
+      	| 'QUERY'
+      	| 'QUICK'
+      	| 'RANDOM'
+      	| 'RANGE'
+      	| 'RANK'
+      	| 'READ'
+      	| 'READS'
+      	| 'REAL'
+      	| 'REBUILD'
+      	| 'RECOVER'
+      	| 'RECURSIVE'
+      	| 'REDO_BUFFER_SIZE'
+      	| 'REDUNDANT'
+      	| 'REFERENCE'
+      	| 'REFERENCES'
+      	| 'REGEXP'
+      	| 'REGISTRATION'
+      	| 'RELAY'
+      	| 'RELAY_LOG_FILE'
+      	| 'RELAY_LOG_POS'
+      	| 'RELAY_THREAD'
+      	| 'RELAYLOG'
+      	| 'RELEASE'
+      	| 'RELOAD'
+      	| 'REMOTE'
+      	| 'REMOVE'
+      	| 'RENAME'
+      	| 'REORGANIZE'
+      	| 'REPAIR'
+      	| 'REPEAT'
+      	| 'REPEATABLE'
+      	| 'REPLACE'
+      	| 'REPLICA'
+      	| 'REPLICAS'
+      	| 'REPLICATE_DO_DB'
+      	| 'REPLICATE_DO_TABLE'
+      	| 'REPLICATE_IGNORE_DB'
+      	| 'REPLICATE_IGNORE_TABLE'
+      	| 'REPLICATE_REWRITE_DB'
+      	| 'REPLICATE_WILD_DO_TABLE'
+      	| 'REPLICATE_WILD_IGNORE_TABLE'
+      	| 'REPLICATION'
+      	| 'REQUIRE'
+      	| 'REQUIRE_ROW_FORMAT'
+      	| 'REQUIRE_TABLE_PRIMARY_KEY_CHECK'
+      	| 'RESET'
+      	| 'RESIGNAL'
+      	| 'RESOURCE'
+      	| 'RESPECT'
+      	| 'RESTART'
+      	| 'RESTRICT'
+      	| 'RESUME'
+      	| 'RETAIN'
+      	| 'RETURN'
+      	| 'RETURNED_SQLSTATE'
+      	| 'RETURNING'
+      	| 'RETURNS'
+      	| 'REUSE'
+      	| 'REVERSE'
+      	| 'REVOKE'
+      	| 'RIGHT'
+      	| 'ROLE'
+      	| 'ROLLBACK'
+      	| 'ROLLUP'
+      	| 'ROTATE'
+      	| 'ROUTINE'
+      	| 'ROW'
+      	| 'ROW_COUNT'
+      	| 'ROW_FORMAT'
+      	| 'ROW_NUMBER'
+      	| 'ROWS'
+      	| 'RTREE'
+      	| 'S3'
+      	| 'SAVEPOINT'
+      	| 'SCHEDULE'
+      	| 'SCHEMA_NAME'
+      	| 'SECOND'
+      	| 'SECOND_MICROSECOND'
+      	| 'SECONDARY'
+      	| 'SECONDARY_ENGINE'
+      	| 'SECONDARY_ENGINE_ATTRIBUTE'
+      	| 'SECONDARY_LOAD'
+      	| 'SECONDARY_UNLOAD'
+      	| 'SECURITY'
+      	| 'SELECT'
+      	| 'SEPARATOR'
+      	| 'SERIAL'
+      	| 'SERIALIZABLE'
+      	| 'SERVER'
+      	| 'SESSION'
+      	| 'SET'
+      	| 'SHARE'
+      	| 'SHOW'
+      	| 'SHUTDOWN'
+      	| 'SIGNAL'
+      	| 'SIGNED'
+      	| 'SIMPLE'
+      	| 'SKIP'
+      	| 'SLAVE'
+      	| 'SLOW'
+      	| 'SMALLINT'
+      	| 'SNAPSHOT'
+      	| 'SOCKET'
+      	| 'SONAME'
+      	| 'SOUNDS'
+      	| 'SOURCE'
+      	| 'SOURCE_AUTO_POSITION'
+      	| 'SOURCE_BIND'
+      	| 'SOURCE_COMPRESSION_ALGORITHM'
+      	| 'SOURCE_CONNECT_RETRY'
+      	| 'SOURCE_CONNECTION_AUTO_FAILOVER'
+      	| 'SOURCE_DELAY'
+      	| 'SOURCE_HEARTBEAT_PERIOD'
+      	| 'SOURCE_HOST'
+      	| 'SOURCE_LOG_FILE'
+      	| 'SOURCE_LOG_POS'
+      	| 'SOURCE_PASSWORD'
+      	| 'SOURCE_PORT'
+      	| 'SOURCE_PUBLIC_KEY_PATH'
+      	| 'SOURCE_RETRY_COUNT'
+      	| 'SOURCE_SSL'
+      	| 'SOURCE_SSL_CA'
+      	| 'SOURCE_SSL_CAPATH'
+      	| 'SOURCE_SSL_CERT'
+      	| 'SOURCE_SSL_CIPHER'
+      	| 'SOURCE_SSL_CRL'
+      	| 'SOURCE_SSL_CRLPATH'
+      	| 'SOURCE_SSL_KEY'
+      	| 'SOURCE_SSL_VERIFY_SERVER_CERT'
+      	| 'SOURCE_TLS_CIPHERSUITES'
+      	| 'SOURCE_TLS_VERSION'
+      	| 'SOURCE_USER'
+      	| 'SOURCE_ZSTD_COMPRESSION_LEVEL'
+      	| 'SPATIAL'
+      	| 'SQL'
+      	| 'SQL_AFTER_GTIDS'
+      	| 'SQL_AFTER_MTS_GAPS'
+      	| 'SQL_BEFORE_GTIDS'
+      	| 'SQL_BIG_RESULT'
+      	| 'SQL_BUFFER_RESULT'
+      	| 'SQL_CALC_FOUND_ROWS'
+      	| 'SQL_NO_CACHE'
+      	| 'SQL_SMALL_RESULT'
+      	| 'SQL_THREAD'
+      	| 'SQLEXCEPTION'
+      	| 'SQLSTATE'
+      	| 'SQLWARNING'
+      	| 'SRID'
+      	| 'SSL'
+      	| 'ST_COLLECT'
+      	| 'STACKED'
+      	| 'START'
+      	| 'STARTING'
+      	| 'STARTS'
+      	| 'STATS_AUTO_RECALC'
+      	| 'STATS_PERSISTENT'
+      	| 'STATS_SAMPLE_PAGES'
+      	| 'STATUS'
+      	| 'STD'
+      	| 'STDDEV_SAMP'
+      	| 'STOP'
+      	| 'STORAGE'
+      	| 'STORED'
+      	| 'STRAIGHT_JOIN'
+      	| 'STREAM'
+      	| 'STRING'
+      	| 'SUBCLASS_ORIGIN'
+      	| 'SUBDATE'
+      	| 'SUBJECT'
+      	| 'SUBPARTITION'
+      	| 'SUBPARTITIONS'
+      	| 'SUBSTRING'
+      	| 'SUM'
+      	| 'SUPER'
+      	| 'SUSPEND'
+      	| 'SWAPS'
+      	| 'SWITCHES'
+      	| 'SYSDATE'
+      	| 'SYSTEM'
+      	| 'TABLE'
+      	| 'TABLE_CHECKSUM'
+      	| 'TABLE_NAME'
+      	| 'TABLES'
+      	| 'TABLESAMPLE'
+      	| 'TABLESPACE'
+      	| 'TEMPORARY'
+      	| 'TEMPTABLE'
+      	| 'TERMINATED'
+      	| 'TEXT'
+      	| 'THAN'
+      	| 'THEN'
+      	| 'THREAD_PRIORITY'
+      	| 'TIES'
+      	| 'TIME'
+      	| 'TIMESTAMP'
+      	| 'TIMESTAMPADD'
+      	| 'TIMESTAMPDIFF'
+      	| 'TINYBLOB'
+      	| 'TINYINT'
+      	| 'TINYTEXT'
+      	| 'TLS'
+      	| 'TO'
+      	| 'TRAILING'
+      	| 'TRANSACTION'
+      	| 'TRIGGER'
+      	| 'TRIGGERS'
+      	| 'TRIM'
+      	| 'TRUE'
+      	| 'TRUNCATE'
+      	| 'TYPE'
+      	| 'UNBOUNDED'
+      	| 'UNCOMMITTED'
+      	| 'UNDEFINED'
+      	| 'UNDO'
+      	| 'UNDO_BUFFER_SIZE'
+      	| 'UNDOFILE'
+      	| 'UNICODE'
+      	| 'UNINSTALL'
+      	| 'UNION'
+      	| 'UNIQUE'
+      	| 'UNKNOWN'
+      	| 'UNLOCK'
+      	| 'UNREGISTER'
+      	| 'UNSIGNED'
+      	| 'UNTIL'
+      	| 'UPDATE'
+      	| 'UPGRADE'
+      	| 'URL'
+      	| 'USAGE'
+      	| 'USE'
+      	| 'USE_FRM'
+      	| 'USER'
+      	| 'USER_RESOURCES'
+      	| 'USING'
+      	| 'UTC_DATE'
+      	| 'UTC_TIME'
+      	| 'UTC_TIMESTAMP'
+      	| 'VALIDATION'
+      	| 'VALUE'
+      	| 'VALUES'
+      	| 'VAR_SAMP'
+      	| 'VARBINARY'
+      	| 'VARCHAR'
+      	| 'VARIABLES'
+      	| 'VARIANCE'
+      	| 'VARYING'
+      	| 'VCPU'
+      	| 'VIEW'
+      	| 'VIRTUAL'
+      	| 'VISIBLE'
+      	| 'WAIT'
+      	| 'WARNINGS'
+      	| 'WEEK'
+      	| 'WEIGHT_STRING'
+      	| 'WHEN'
+      	| 'WHERE'
+      	| 'WHILE'
+      	| 'WINDOW'
+      	| 'WITH'
+      	| 'WITHOUT'
+      	| 'WORK'
+      	| 'WRAPPER'
+      	| 'WRITE'
+      	| 'X509'
+      	| 'XA'
+      	| 'XID'
+      	| 'XML'
+      	| 'XOR'
+      	| 'YEAR'
+      	| 'YEAR_MONTH'
+      	| 'ZEROFILL'
+      	| 'ZONE'
+
     ;
-
-setVarIdentType
-    : (
-        'PERSIST'
-        | 'PERSIST_ONLY'
-        | 'GLOBAL'
-        | 'LOCAL'
-        | 'SESSION'
-    ) '.'
-    ;
-
-// Note: rules for non-reserved keywords have changed significantly with MySQL 8.0.17, which make their
-//       version dependent handling complicated.
-//       Comments for keyword rules are taken over directly from the server grammar, but usually don't apply here
-//       since we don't have something like shift/reduce conflicts in ANTLR4 (which those ugly rules try to overcome).
-
-// Non-reserved keywords are allowed as unquoted identifiers in general.
-//
-// OTOH, in a few particular cases statement-specific rules are used
-// instead of `ident_keyword` to avoid grammar ambiguities:
-//
-//  * `label_keyword` for SP label names
-//  * `role_keyword` for role names
-//  * `lvalue_keyword` for variable prefixes and names in left sides of
-//                     assignments in SET statements
-//
-// Normally, new non-reserved words should be added to the
-// the rule `ident_keywords_unambiguous`. If they cause grammar conflicts, try
-// one of `ident_keywords_ambiguous_...` rules instead.
-identifierKeyword
-    : (
-        labelKeyword
-        | roleOrIdentifierKeyword
-        | 'EXECUTE'
-        | 'SHUTDOWN' // Previously allowed as SP label as well.
-        | 'RESTART'
-    )
-    | (
-        identifierKeywordsUnambiguous
-        | identifierKeywordsAmbiguous1RolesAndLabels
-        | identifierKeywordsAmbiguous2Labels
-        | identifierKeywordsAmbiguous3Roles
-        | identifierKeywordsAmbiguous4SystemVariables
-    )
-    ;
-
-// These non-reserved words cannot be used as role names and SP label names:
-identifierKeywordsAmbiguous1RolesAndLabels
-    : 'EXECUTE'
-    | 'RESTART'
-    | 'SHUTDOWN'
-    ;
-
-// These non-reserved keywords cannot be used as unquoted SP label names:
-identifierKeywordsAmbiguous2Labels
-    : 'ASCII'
-    | 'BEGIN'
-    | 'BYTE'
-    | 'CACHE'
-    | 'CHARSET'
-    | 'CHECKSUM'
-    | 'CLONE'
-    | 'COMMENT'
-    | 'COMMIT'
-    | 'CONTAINS'
-    | 'DEALLOCATE'
-    | 'DO'
-    | 'END'
-    | 'FLUSH'
-    | 'FOLLOWS'
-    | 'HANDLER'
-    | 'HELP'
-    | 'IMPORT'
-    | 'INSTALL'
-    | 'LANGUAGE'
-    | 'NO'
-    | 'PRECEDES'
-    | 'PREPARE'
-    | 'REPAIR'
-    | 'RESET'
-    | 'ROLLBACK'
-    | 'SAVEPOINT'
-    | 'SIGNED'
-    | 'SLAVE'
-    | 'START'
-    | 'STOP'
-    | 'TRUNCATE'
-    | 'UNICODE'
-    | 'UNINSTALL'
-    | 'XA'
-    ;
-
-// Keywords that we allow for labels in SPs in the unquoted form.
-// Any keyword that is allowed to begin a statement or routine characteristics
-// must be in `ident_keywords_ambiguous_2_labels` above, otherwise
-// we get (harmful) shift/reduce conflicts.
-//
-// Not allowed:
-//
-//   ident_keywords_ambiguous_1_roles_and_labels
-//   ident_keywords_ambiguous_2_labels
-labelKeyword
-    : (
-        roleOrLabelKeyword
-        | 'EVENT'
-        | 'FILE'
-        | 'NONE'
-        | 'PROCESS'
-        | 'PROXY'
-        | 'RELOAD'
-        | 'REPLICATION'
-        | 'RESOURCE'
-        | 'SUPER'
-    )
-    | (
-        identifierKeywordsUnambiguous
-        | identifierKeywordsAmbiguous3Roles
-        | identifierKeywordsAmbiguous4SystemVariables
-    )
-    ;
-
-// These non-reserved keywords cannot be used as unquoted role names:
-identifierKeywordsAmbiguous3Roles
-    : 'EVENT'
-    | 'FILE'
-    | 'NONE'
-    | 'PROCESS'
-    | 'PROXY'
-    | 'RELOAD'
-    | 'REPLICATION'
-    | 'RESOURCE'
-    | 'SUPER'
-    ;
-
-// These are the non-reserved keywords which may be used for unquoted
-// identifiers everywhere without introducing grammar conflicts:
-identifierKeywordsUnambiguous
-    : (
-        'ACTION'
-        | 'ACCOUNT'
-        | 'ACTIVE'
-        | 'ADDDATE'
-        | 'ADMIN'
-        | 'AFTER'
-        | 'AGAINST'
-        | 'AGGREGATE'
-        | 'ALGORITHM'
-        | 'ALWAYS'
-        | 'ANY'
-        | 'AT'
-        | 'ATTRIBUTE'
-        | 'AUTHENTICATION'
-        | 'AUTOEXTEND_SIZE'
-        | 'AUTO_INCREMENT'
-        | 'AVG_ROW_LENGTH'
-        | 'AVG'
-        | 'BACKUP'
-        | 'BINLOG'
-        | 'BIT'
-        | 'BLOCK'
-        | 'BOOLEAN'
-        | 'BOOL'
-        | 'BTREE'
-        | 'BUCKETS'
-        | 'CASCADED'
-        | 'CATALOG_NAME'
-        | 'CHAIN'
-        | 'CHALLENGE_RESPONSE'
-        | 'CHANGED'
-        | 'CHANNEL'
-        | 'CIPHER'
-        | 'CLASS_ORIGIN'
-        | 'CLIENT'
-        | 'CLOSE'
-        | 'COALESCE'
-        | 'CODE'
-        | 'COLLATION'
-        | 'COLUMNS'
-        | 'COLUMN_FORMAT'
-        | 'COLUMN_NAME'
-        | 'COMMITTED'
-        | 'COMPACT'
-        | 'COMPLETION'
-        | 'COMPONENT'
-        | 'COMPRESSED'
-        | 'COMPRESSION'
-        | 'CONCURRENT'
-        | 'CONNECTION'
-        | 'CONSISTENT'
-        | 'CONSTRAINT_CATALOG'
-        | 'CONSTRAINT_NAME'
-        | 'CONSTRAINT_SCHEMA'
-        | 'CONTEXT'
-        | 'CPU'
-        | 'CURRENT'
-        | 'CURSOR_NAME'
-        | 'DATAFILE'
-        | 'DATA'
-        | 'DATETIME'
-        | 'DATE'
-        | 'DAY'
-        | 'DEFAULT_AUTH'
-        | 'DEFINER'
-        | 'DEFINITION'
-        | 'DELAY_KEY_WRITE'
-        | 'DESCRIPTION'
-        | 'DIAGNOSTICS'
-        | 'DIRECTORY'
-        | 'DISABLE'
-        | 'DISCARD'
-        | 'DISK'
-        | 'DUMPFILE'
-        | 'DUPLICATE'
-        | 'DYNAMIC'
-        | 'ENABLE'
-        | 'ENCRYPTION'
-        | 'ENDS'
-        | 'ENFORCED'
-        | 'ENGINES'
-        | 'ENGINE'
-        | 'ENUM'
-        | 'ERRORS'
-        | 'ERROR'
-        | 'ESCAPE'
-        | 'EVENTS'
-        | 'EVERY'
-        | 'EXCHANGE'
-        | 'EXCLUDE'
-        | 'EXPANSION'
-        | 'EXPIRE'
-        | 'EXPORT'
-        | 'EXTENDED'
-        | 'EXTENT_SIZE'
-        | 'FACTOR'
-        | 'FAST'
-        | 'FAULTS'
-        | 'FILE_BLOCK_SIZE'
-        | 'FILTER'
-        | 'FINISH'
-        | 'FIRST'
-        | 'FIXED'
-        | 'FOLLOWING'
-        | 'FORMAT'
-        | 'FOUND'
-        | 'FULL'
-        | 'GENERAL'
-        | 'GEOMETRYCOLLECTION'
-        | 'GEOMETRY'
-        | 'GET_FORMAT'
-        | 'GET_MASTER_PUBLIC_KEY'
-        | 'GET_SOURCE_PUBLIC_KEY'
-        | 'GRANTS'
-        | 'GROUP_REPLICATION'
-        | 'GTID_ONLY'
-        | 'HASH'
-        | 'HISTOGRAM'
-        | 'HISTORY'
-        | 'HOSTS'
-        | 'HOST'
-        | 'HOUR'
-        | 'IDENTIFIED'
-        | 'IGNORE_SERVER_IDS'
-        | 'INACTIVE'
-        | 'INDEXES'
-        | 'INITIAL_SIZE'
-        | 'INITIAL'
-        | 'INITIATE'
-        | 'INSERT_METHOD'
-        | 'INSTANCE'
-        | 'INVISIBLE'
-        | 'INVOKER'
-        | 'IO'
-        | 'IPC'
-        | 'ISOLATION'
-        | 'ISSUER'
-        | 'JSON'
-        | 'JSON_VALUE'
-        | 'KEY_BLOCK_SIZE'
-        | 'KEYRING'
-        | 'LAST'
-        | 'LEAVES'
-        | 'LESS'
-        | 'LEVEL'
-        | 'LINESTRING'
-        | 'LIST'
-        | 'LOCKED'
-        | 'LOCKS'
-        | 'LOGFILE'
-        | 'LOGS'
-        | 'MASTER_AUTO_POSITION'
-        | 'MASTER_COMPRESSION_ALGORITHM'
-        | 'MASTER_CONNECT_RETRY'
-        | 'MASTER_DELAY'
-        | 'MASTER_HEARTBEAT_PERIOD'
-        | 'MASTER_HOST'
-        | 'NETWORK_NAMESPACE'
-        | 'MASTER_LOG_FILE'
-        | 'MASTER_LOG_POS'
-        | 'MASTER_PASSWORD'
-        | 'MASTER_PORT'
-        | 'MASTER_PUBLIC_KEY_PATH'
-        | 'MASTER_RETRY_COUNT'
-        | 'MASTER_SSL_CAPATH'
-        | 'MASTER_SSL_CA'
-        | 'MASTER_SSL_CERT'
-        | 'MASTER_SSL_CIPHER'
-        | 'MASTER_SSL_CRLPATH'
-        | 'MASTER_SSL_CRL'
-        | 'MASTER_SSL_KEY'
-        | 'MASTER_SSL'
-        | 'MASTER'
-        | 'MASTER_TLS_CIPHERSUITES'
-        | 'MASTER_TLS_VERSION'
-        | 'MASTER_USER'
-        | 'MASTER_ZSTD_COMPRESSION_LEVEL'
-        | 'MAX_CONNECTIONS_PER_HOUR'
-        | 'MAX_QUERIES_PER_HOUR'
-        | 'MAX_ROWS'
-        | 'MAX_SIZE'
-        | 'MAX_UPDATES_PER_HOUR'
-        | 'MAX_USER_CONNECTIONS'
-        | 'MEDIUM'
-        | 'MEMORY'
-        | 'MERGE'
-        | 'MESSAGE_TEXT'
-        | 'MICROSECOND'
-        | 'MIGRATE'
-        | 'MINUTE'
-        | 'MIN_ROWS'
-        | 'MODE'
-        | 'MODIFY'
-        | 'MONTH'
-        | 'MULTILINESTRING'
-        | 'MULTIPOINT'
-        | 'MULTIPOLYGON'
-        | 'MUTEX'
-        | 'MYSQL_ERRNO'
-        | 'NAMES'
-        | 'NAME'
-        | 'NATIONAL'
-        | 'NCHAR'
-        | 'NDBCLUSTER'
-        | 'NESTED'
-        | 'NEVER'
-        | 'NEW'
-        | 'NEXT'
-        | 'NODEGROUP'
-        | 'NOWAIT'
-        | 'NO_WAIT'
-        | 'NULLS'
-        | 'NUMBER'
-        | 'NVARCHAR'
-        | 'OFFSET'
-        | 'OJ'
-        | 'OLD'
-        | 'ONE'
-        | 'ONLY'
-        | 'OPEN'
-        | 'OPTIONAL'
-        | 'OPTIONS'
-        | 'ORDINALITY'
-        | 'ORGANIZATION'
-        | 'OTHERS'
-        | 'OWNER'
-        | 'PACK_KEYS'
-        | 'PAGE'
-        | 'PARSER'
-        | 'PARTIAL'
-        | 'PARTITIONING'
-        | 'PARTITIONS'
-        | 'PASSWORD'
-        | 'PATH'
-        | 'PHASE'
-        | 'PLUGINS'
-        | 'PLUGIN_DIR'
-        | 'PLUGIN'
-        | 'POINT'
-        | 'POLYGON'
-        | 'PORT'
-        | 'PRECEDING'
-        | 'PRESERVE'
-        | 'PREV'
-        | 'PRIVILEGES'
-        | 'PRIVILEGE_CHECKS_USER'
-        | 'PROCESSLIST'
-        | 'PROFILES'
-        | 'PROFILE'
-        | 'QUARTER'
-        | 'QUERY'
-        | 'QUICK'
-        | 'READ_ONLY'
-        | 'REBUILD'
-        | 'RECOVER'
-        | 'REDO_BUFFER_SIZE'
-        | 'REDUNDANT'
-        | 'REFERENCE'
-        | 'REGISTRATION'
-        | 'RELAY'
-        | 'RELAYLOG'
-        | 'RELAY_LOG_FILE'
-        | 'RELAY_LOG_POS'
-        | 'RELAY_THREAD'
-        | 'REMOVE'
-        | 'ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS'
-        | 'REORGANIZE'
-        | 'REPEATABLE'
-        | 'REPLICAS'
-        | 'REPLICATE_DO_DB'
-        | 'REPLICATE_DO_TABLE'
-        | 'REPLICATE_IGNORE_DB'
-        | 'REPLICATE_IGNORE_TABLE'
-        | 'REPLICATE_REWRITE_DB'
-        | 'REPLICATE_WILD_DO_TABLE'
-        | 'REPLICATE_WILD_IGNORE_TABLE'
-        | 'REPLICA'
-        | 'USER_RESOURCES'
-        | 'RESPECT'
-        | 'RESTORE'
-        | 'RESUME'
-        | 'RETAIN'
-        | 'RETURNED_SQLSTATE'
-        | 'RETURNING'
-        | 'RETURNS'
-        | 'REUSE'
-        | 'REVERSE'
-        | 'ROLE'
-        | 'ROLLUP'
-        | 'ROTATE'
-        | 'ROUTINE'
-        | 'ROW_COUNT'
-        | 'ROW_FORMAT'
-        | 'RTREE'
-        | 'SCHEDULE'
-        | 'SCHEMA_NAME'
-        | 'SECONDARY_ENGINE'
-        | 'SECONDARY_ENGINE_ATTRIBUTE'
-        | 'SECONDARY_LOAD'
-        | 'SECONDARY'
-        | 'SECONDARY_UNLOAD'
-        | 'SECOND'
-        | 'SECURITY'
-        | 'SERIALIZABLE'
-        | 'SERIAL'
-        | 'SERVER'
-        | 'SHARE'
-        | 'SIMPLE'
-        | 'SKIP'
-        | 'SLOW'
-        | 'SNAPSHOT'
-        | 'SOCKET'
-        | 'SONAME'
-        | 'SOUNDS'
-        | 'SOURCE_AUTO_POSITION'
-        | 'SOURCE_BIND'
-        | 'SOURCE_COMPRESSION_ALGORITHM'
-        | 'SOURCE_CONNECTION_AUTO_FAILOVER'
-        | 'SOURCE_CONNECT_RETRY'
-        | 'SOURCE_DELAY'
-        | 'SOURCE_HEARTBEAT_PERIOD'
-        | 'SOURCE_HOST'
-        | 'SOURCE_LOG_FILE'
-        | 'SOURCE_LOG_POS'
-        | 'SOURCE_PASSWORD'
-        | 'SOURCE_PORT'
-        | 'SOURCE_PUBLIC_KEY_PATH'
-        | 'SOURCE_RETRY_COUNT'
-        | 'SOURCE_SSL_CAPATH'
-        | 'SOURCE_SSL_CA'
-        | 'SOURCE_SSL_CERT'
-        | 'SOURCE_SSL_CIPHER'
-        | 'SOURCE_SSL_CRLPATH'
-        | 'SOURCE_SSL_CRL'
-        | 'SOURCE_SSL_KEY'
-        | 'SOURCE_SSL'
-        | 'SOURCE_SSL_VERIFY_SERVER_CERT'
-        | 'SOURCE'
-        | 'SOURCE_TLS_CIPHERSUITES'
-        | 'SOURCE_TLS_VERSION'
-        | 'SOURCE_USER'
-        | 'SOURCE_ZSTD_COMPRESSION_LEVEL'
-        | 'SQL_AFTER_GTIDS'
-        | 'SQL_AFTER_MTS_GAPS'
-        | 'SQL_BEFORE_GTIDS'
-        | 'SQL_BUFFER_RESULT'
-        | 'SQL_NO_CACHE'
-        | 'SQL_THREAD'
-        | 'SRID'
-        | 'STACKED'
-        | 'STARTS'
-        | 'STATS_AUTO_RECALC'
-        | 'STATS_PERSISTENT'
-        | 'STATS_SAMPLE_PAGES'
-        | 'STATUS'
-        | 'STORAGE'
-        | 'STRING'
-        | 'ST_COLLECT'
-        | 'SUBCLASS_ORIGIN'
-        | 'SUBDATE'
-        | 'SUBJECT'
-        | 'SUBPARTITIONS'
-        | 'SUBPARTITION'
-        | 'SUSPEND'
-        | 'SWAPS'
-        | 'SWITCHES'
-        | 'TABLES'
-        | 'TABLESPACE'
-        | 'TABLE_CHECKSUM'
-        | 'TABLE_NAME'
-        | 'TEMPORARY'
-        | 'TEMPTABLE'
-        | 'TEXT'
-        | 'THAN'
-        | 'THREAD_PRIORITY'
-        | 'TIES'
-        | 'TIMESTAMPADD'
-        | 'TIMESTAMPDIFF'
-        | 'TIMESTAMP'
-        | 'TIME'
-        | 'TLS'
-        | 'TRANSACTION'
-        | 'TRIGGERS'
-        | 'TYPES'
-        | 'TYPE'
-        | 'UNBOUNDED'
-        | 'UNCOMMITTED'
-        | 'UNDEFINED'
-        | 'UNDOFILE'
-        | 'UNDO_BUFFER_SIZE'
-        | 'UNKNOWN'
-        | 'UNREGISTER'
-        | 'UNTIL'
-        | 'UPGRADE'
-        | 'USER'
-        | 'USE_FRM'
-        | 'VALIDATION'
-        | 'VALUE'
-        | 'VARIABLES'
-        | 'VCPU'
-        | 'VIEW'
-        | 'VISIBLE'
-        | 'WAIT'
-        | 'WARNINGS'
-        | 'WEEK'
-        | 'WEIGHT_STRING'
-        | 'WITHOUT'
-        | 'WORK'
-        | 'WRAPPER'
-        | 'X509'
-        | 'XID'
-        | 'XML'
-        | 'YEAR'
-        | 'ZONE'
-    )
-    | (
-        'ARRAY'
-        | 'FAILED_LOGIN_ATTEMPTS'
-        | 'MASTER_COMPRESSION_ALGORITHM'
-        | 'MASTER_TLS_CIPHERSUITES'
-        | 'MASTER_ZSTD_COMPRESSION_LEVEL'
-        | 'MEMBER'
-        | 'OFF'
-        | 'PASSWORD_LOCK_TIME'
-        | 'PRIVILEGE_CHECKS_USER'
-        | 'RANDOM'
-        | 'REQUIRE_ROW_FORMAT'
-        | 'REQUIRE_TABLE_PRIMARY_KEY_CHECK'
-        | 'STREAM'
-        | 'TIMESTAMP'
-        | 'TIME'
-    )
-    | (
-        'BULK'
-        | 'GENERATE'
-        | 'GTIDS'
-        | 'LOG'
-        | 'PARSE_TREE'
-        | 'S3'
-        | 'BERNOULLI'
-    )
-    /* INSERT OTHER KEYWORDS HERE */
-    ;
-
-// Non-reserved keywords that we allow for unquoted role names:
-//
-//  Not allowed:
-//
-//    ident_keywords_ambiguous_1_roles_and_labels
-//    ident_keywords_ambiguous_3_roles
-roleKeyword
-    : (roleOrLabelKeyword | roleOrIdentifierKeyword)
-    | (
-        identifierKeywordsUnambiguous
-        | identifierKeywordsAmbiguous2Labels
-        | identifierKeywordsAmbiguous4SystemVariables
-    )
-    ;
-
-// Non-reserved words allowed for unquoted unprefixed variable names and
-// unquoted variable prefixes in the left side of assignments in SET statements:
-//
-// Not allowed:
-//
-//   ident_keywords_ambiguous_4_system_variables
-lValueKeyword
-    : identifierKeywordsUnambiguous
-    | identifierKeywordsAmbiguous1RolesAndLabels
-    | identifierKeywordsAmbiguous2Labels
-    | identifierKeywordsAmbiguous3Roles
-    ;
-
-// These non-reserved keywords cannot be used as unquoted unprefixed
-// variable names and unquoted variable prefixes in the left side of
-// assignments in SET statements:
-identifierKeywordsAmbiguous4SystemVariables
-    : 'GLOBAL'
-    | 'LOCAL'
-    | 'PERSIST'
-    | 'PERSIST_ONLY'
-    | 'SESSION'
-    ;
-
-// $antlr-format groupedAlignments off
-
-// These are the non-reserved keywords which may be used for roles or idents.
-// Keywords defined only for specific server versions are handled at lexer level and so cannot match this rule
-// if the current server version doesn't allow them. Hence we don't need predicates here for them.
-roleOrIdentifierKeyword
-    : (
-        'ACCOUNT'
-        | 'ASCII'
-        | 'ALWAYS'
-        | 'BACKUP'
-        | 'BEGIN'
-        | 'BYTE'
-        | 'CACHE'
-        | 'CHARSET'
-        | 'CHECKSUM'
-        | 'CLONE'
-        | 'CLOSE'
-        | 'COMMENT'
-        | 'COMMIT'
-        | 'CONTAINS'
-        | 'DEALLOCATE'
-        | 'DO'
-        | 'END'
-        | 'FLUSH'
-        | 'FOLLOWS'
-        | 'FORMAT'
-        | 'GROUP_REPLICATION'
-        | 'HANDLER'
-        | 'HELP'
-        | 'HOST'
-        | 'INSTALL'
-        | 'INVISIBLE'
-        | 'LANGUAGE'
-        | 'NO'
-        | 'OPEN'
-        | 'OPTIONS'
-        | 'OWNER'
-        | 'PARSER'
-        | 'PARTITION'
-        | 'PORT'
-        | 'PRECEDES'
-        | 'PREPARE'
-        | 'REMOVE'
-        | 'REPAIR'
-        | 'RESET'
-        | 'RESTORE'
-        | 'ROLE'
-        | 'ROLLBACK'
-        | 'SAVEPOINT'
-        | 'SECONDARY'
-        | 'SECONDARY_ENGINE'
-        | 'SECONDARY_LOAD'
-        | 'SECONDARY_UNLOAD'
-        | 'SECURITY'
-        | 'SERVER'
-        | 'SIGNED'
-        | 'SOCKET'
-        | 'SLAVE'
-        | 'SONAME'
-        | 'START'
-        | 'STOP'
-        | 'TRUNCATE'
-        | 'UNICODE'
-        | 'UNINSTALL'
-        | 'UPGRADE'
-        | 'VISIBLE'
-        | 'WRAPPER'
-        | 'XA'
-    )
-    ;
-
-roleOrLabelKeyword
-    : (
-        'ACTION'
-        | 'ACTIVE'
-        | 'ADDDATE'
-        | 'AFTER'
-        | 'AGAINST'
-        | 'AGGREGATE'
-        | 'ALGORITHM'
-        | 'ANY'
-        | 'AT'
-        | 'AUTO_INCREMENT'
-        | 'AUTOEXTEND_SIZE'
-        | 'AVG_ROW_LENGTH'
-        | 'AVG'
-        | 'BINLOG'
-        | 'BIT'
-        | 'BLOCK'
-        | 'BOOL'
-        | 'BOOLEAN'
-        | 'BTREE'
-        | 'BUCKETS'
-        | 'CASCADED'
-        | 'CATALOG_NAME'
-        | 'CHAIN'
-        | 'CHANGED'
-        | 'CHANNEL'
-        | 'CIPHER'
-        | 'CLIENT'
-        | 'CLASS_ORIGIN'
-        | 'COALESCE'
-        | 'CODE'
-        | 'COLLATION'
-        | 'COLUMN_NAME'
-        | 'COLUMN_FORMAT'
-        | 'COLUMNS'
-        | 'COMMITTED'
-        | 'COMPACT'
-        | 'COMPLETION'
-        | 'COMPONENT'
-        | 'COMPRESSED'
-        | 'COMPRESSION'
-        | 'CONCURRENT'
-        | 'CONNECTION'
-        | 'CONSISTENT'
-        | 'CONSTRAINT_CATALOG'
-        | 'CONSTRAINT_SCHEMA'
-        | 'CONSTRAINT_NAME'
-        | 'CONTEXT'
-        | 'CPU'
-        | 'CURRENT'
-        | 'CURSOR_NAME'
-        | 'DATA'
-        | 'DATAFILE'
-        | 'DATETIME'
-        | 'DATE'
-        | 'DAY'
-        | 'DEFAULT_AUTH'
-        | 'DEFINER'
-        | 'DELAY_KEY_WRITE'
-        | 'DESCRIPTION'
-        | 'DIAGNOSTICS'
-        | 'DIRECTORY'
-        | 'DISABLE'
-        | 'DISCARD'
-        | 'DISK'
-        | 'DUMPFILE'
-        | 'DUPLICATE'
-        | 'DYNAMIC'
-        | 'ENCRYPTION'
-        | 'ENDS'
-        | 'ENUM'
-        | 'ENGINE'
-        | 'ENGINES'
-        | 'ENGINE_ATTRIBUTE'
-        | 'ERROR'
-        | 'ERRORS'
-        | 'ESCAPE'
-        | 'EVENTS'
-        | 'EVERY'
-        | 'EXCLUDE'
-        | 'EXPANSION'
-        | 'EXPORT'
-        | 'EXTENDED'
-        | 'EXTENT_SIZE'
-        | 'FAULTS'
-        | 'FAST'
-        | 'FOLLOWING'
-        | 'FOUND'
-        | 'ENABLE'
-        | 'FULL'
-        | 'FILE_BLOCK_SIZE'
-        | 'FILTER'
-        | 'FIRST'
-        | 'FIXED'
-        | 'GENERAL'
-        | 'GEOMETRY'
-        | 'GEOMETRYCOLLECTION'
-        | 'GET_FORMAT'
-        | 'GRANTS'
-        | 'GLOBAL'
-        | 'HASH'
-        | 'HISTOGRAM'
-        | 'HISTORY'
-        | 'HOSTS'
-        | 'HOUR'
-        | 'IDENTIFIED'
-        | 'IGNORE_SERVER_IDS'
-        | 'INVOKER'
-        | 'INDEXES'
-        | 'INITIAL_SIZE'
-        | 'INSTANCE'
-        | 'INACTIVE'
-        | 'IO'
-        | 'IPC'
-        | 'ISOLATION'
-        | 'ISSUER'
-        | 'INSERT_METHOD'
-        | 'JSON'
-        | 'KEY_BLOCK_SIZE'
-        | 'LAST'
-        | 'LEAVES'
-        | 'LESS'
-        | 'LEVEL'
-        | 'LINESTRING'
-        | 'LIST'
-        | 'LOCAL'
-        | 'LOCKED'
-        | 'LOCKS'
-        | 'LOGFILE'
-        | 'LOGS'
-        | 'MAX_ROWS'
-        | 'MASTER'
-        | 'MASTER_HEARTBEAT_PERIOD'
-        | 'MASTER_HOST'
-        | 'MASTER_PORT'
-        | 'MASTER_LOG_FILE'
-        | 'MASTER_LOG_POS'
-        | 'MASTER_USER'
-        | 'MASTER_PASSWORD'
-        | 'MASTER_PUBLIC_KEY_PATH'
-        | 'MASTER_CONNECT_RETRY'
-        | 'MASTER_RETRY_COUNT'
-        | 'MASTER_DELAY'
-        | 'MASTER_SSL'
-        | 'MASTER_SSL_CA'
-        | 'MASTER_SSL_CAPATH'
-        | 'MASTER_TLS_VERSION'
-        | 'MASTER_SSL_CERT'
-        | 'MASTER_SSL_CIPHER'
-        | 'MASTER_SSL_CRL'
-        | 'MASTER_SSL_CRLPATH'
-        | 'MASTER_SSL_KEY'
-        | 'MASTER_AUTO_POSITION'
-        | 'MAX_CONNECTIONS_PER_HOUR'
-        | 'MAX_QUERIES_PER_HOUR'
-        | 'MAX_SIZE'
-        | 'MAX_UPDATES_PER_HOUR'
-        | 'MAX_USER_CONNECTIONS'
-        | 'MEDIUM'
-        | 'MEMORY'
-        | 'MERGE'
-        | 'MESSAGE_TEXT'
-        | 'MICROSECOND'
-        | 'MIGRATE'
-        | 'MINUTE'
-        | 'MIN_ROWS'
-        | 'MODIFY'
-        | 'MODE'
-        | 'MONTH'
-        | 'MULTILINESTRING'
-        | 'MULTIPOINT'
-        | 'MULTIPOLYGON'
-        | 'MUTEX'
-        | 'MYSQL_ERRNO'
-        | 'NAME'
-        | 'NAMES'
-        | 'NATIONAL'
-        | 'NCHAR'
-        | 'NDBCLUSTER'
-        | 'NESTED'
-        | 'NEVER'
-        | 'NEXT'
-        | 'NEW'
-        | 'NO_WAIT'
-        | 'NODEGROUP'
-        | 'NULLS'
-        | 'NOWAIT'
-        | 'NUMBER'
-        | 'NVARCHAR'
-        | 'OFFSET'
-        | 'OLD'
-        | 'ONE'
-        | 'OPTIONAL'
-        | 'ORDINALITY'
-        | 'ORGANIZATION'
-        | 'OTHERS'
-        | 'PACK_KEYS'
-        | 'PAGE'
-        | 'PARTIAL'
-        | 'PARTITIONING'
-        | 'PARTITIONS'
-        | 'PASSWORD'
-        | 'PATH'
-        | 'PHASE'
-        | 'PLUGIN_DIR'
-        | 'PLUGIN'
-        | 'PLUGINS'
-        | 'POINT'
-        | 'POLYGON'
-        | 'PRECEDING'
-        | 'PRESERVE'
-        | 'PREV'
-        | 'THREAD_PRIORITY'
-        | 'PRIVILEGES'
-        | 'PROCESSLIST'
-        | 'PROFILE'
-        | 'PROFILES'
-        | 'QUARTER'
-        | 'QUERY'
-        | 'QUICK'
-        | 'READ_ONLY'
-        | 'REBUILD'
-        | 'RECOVER'
-        | 'REDO_BUFFER_SIZE'
-        | 'REDUNDANT'
-        | 'RELAY'
-        | 'RELAYLOG'
-        | 'RELAY_LOG_FILE'
-        | 'RELAY_LOG_POS'
-        | 'RELAY_THREAD'
-        | 'REMOTE'
-        | 'REORGANIZE'
-        | 'REPEATABLE'
-        | 'REPLICATE_DO_DB'
-        | 'REPLICATE_IGNORE_DB'
-        | 'REPLICATE_DO_TABLE'
-        | 'REPLICATE_IGNORE_TABLE'
-        | 'REPLICATE_WILD_DO_TABLE'
-        | 'REPLICATE_WILD_IGNORE_TABLE'
-        | 'REPLICATE_REWRITE_DB'
-        | 'USER_RESOURCES'
-        | 'RESPECT'
-        | 'RESUME'
-        | 'RETAIN'
-        | 'RETURNED_SQLSTATE'
-        | 'RETURNS'
-        | 'REUSE'
-        | 'REVERSE'
-        | 'ROLLUP'
-        | 'ROTATE'
-        | 'ROUTINE'
-        | 'ROW_COUNT'
-        | 'ROW_FORMAT'
-        | 'RTREE'
-        | 'SCHEDULE'
-        | 'SCHEMA_NAME'
-        | 'SECOND'
-        | 'SERIAL'
-        | 'SERIALIZABLE'
-        | 'SESSION'
-        | 'SHARE'
-        | 'SIMPLE'
-        | 'SKIP'
-        | 'SLOW'
-        | 'SNAPSHOT'
-        | 'SOUNDS'
-        | 'SOURCE'
-        | 'SQL_AFTER_GTIDS'
-        | 'SQL_AFTER_MTS_GAPS'
-        | 'SQL_BEFORE_GTIDS'
-        | 'SQL_BUFFER_RESULT'
-        | 'SQL_NO_CACHE'
-        | 'SQL_THREAD'
-        | 'SRID'
-        | 'STACKED'
-        | 'STARTS'
-        | 'STATS_AUTO_RECALC'
-        | 'STATS_PERSISTENT'
-        | 'STATS_SAMPLE_PAGES'
-        | 'STATUS'
-        | 'STORAGE'
-        | 'STRING'
-        | 'SUBCLASS_ORIGIN'
-        | 'SUBDATE'
-        | 'SUBJECT'
-        | 'SUBPARTITION'
-        | 'SUBPARTITIONS'
-        | 'SUPER'
-        | 'SUSPEND'
-        | 'SWAPS'
-        | 'SWITCHES'
-        | 'TABLE_NAME'
-        | 'TABLES'
-        | 'TABLE_CHECKSUM'
-        | 'TABLESPACE'
-        | 'TEMPORARY'
-        | 'TEMPTABLE'
-        | 'TEXT'
-        | 'THAN'
-        | 'TIES'
-        | 'TRANSACTION'
-        | 'TRIGGERS'
-        | 'TIMESTAMP'
-        | 'TIMESTAMPADD'
-        | 'TIMESTAMPDIFF'
-        | 'TIME'
-        | 'TYPES'
-        | 'TYPE'
-        | 'UDF_RETURNS'
-        | 'UNBOUNDED'
-        | 'UNCOMMITTED'
-        | 'UNDEFINED'
-        | 'UNDO_BUFFER_SIZE'
-        | 'UNDOFILE'
-        | 'UNKNOWN'
-        | 'UNTIL'
-        | 'USER'
-        | 'USE_FRM'
-        | 'VARIABLES'
-        | 'VCPU'
-        | 'VIEW'
-        | 'VALUE'
-        | 'WARNINGS'
-        | 'WAIT'
-        | 'WEEK'
-        | 'WORK'
-        | 'WEIGHT_STRING'
-        | 'X509'
-        | 'XID'
-        | 'XML'
-        | 'YEAR'
-    )
-    // Tokens that entered or left this rule in specific versions and are not automatically
-    // handled in the lexer.
-    | 'ADMIN'
-    ;
-
-//tokens {
-//    NOT2_SYMBOL,
-//    'CONCAT_PIPES',
-//
-//    // Tokens assigned in NUMBER rule.
-//    INT_NUMBER, // NUM in sql_yacc.yy
-//    LONG_NUMBER,
-//    ULONGLONG_NUMBER
-//}
 
 
 
 // The MySQL server parser uses custom code in its lexer to allow base alphanum chars (and ._$) as variable name.
 // For this it handles user variables in 2 different ways and we have to model this to match that behavior.
 
-AT_TEXT_SUFFIX
-    : '@' SIMPLE_IDENTIFIER
-    ;
+//AT_TEXT_SUFFIX
+//    : '@' (DIGIT | [A-Z_$] | '.')+
+//    ;
 
-PARAM_MARKER
+PARAM
     : '?'
     ;
 
@@ -5388,11 +4410,18 @@ fragment HEXDIGIT
 
 // Only lower case 'x' and 'b' count for hex + bin numbers. Otherwise it's an identifier.
 HEX_NUMBER
+options {
+    caseInsensitive = false;
+}
+
     : ('0x' HEXDIGIT+)
     | ('x\'' HEXDIGIT+ '\'')
     ;
 
 BIN_NUMBER
+options {
+    caseInsensitive = false;
+}
     : ('0b' [01]+)
     | ('b\'' [01]+ '\'')
     ;
@@ -5403,76 +4432,82 @@ INT_NUMBER
 
 // Float types must be handled first or the DOT_IDENTIIFER rule will make them to identifiers
 // (if there is no leading digit before the dot).
+//DECIMAL_NUMBER
+//    : DIGITS? '.' DIGITS
+//    ;
+//
+//FLOAT_NUMBER
+//    : (DIGITS? '.')? DIGITS 'E' ('-' | '+')? DIGITS
+//    ;
+
 DECIMAL_NUMBER
-    : DIGITS? '.' DIGITS
-    ;
-
-FLOAT_NUMBER
-    : (DIGITS? '.')? DIGITS 'E' ('-' | '+')? DIGITS
-    ;
-
-// Special rule that should also match all keywords if they are directly preceded by a dot.
-// Hence it's defined before all keywords.
-// Here we make use of the ability in our base lexer to emit multiple tokens with a single rule.
-DOT_IDENTIFIER
-    : '.' LETTER_WHEN_UNQUOTED_NO_DIGIT LETTER_WHEN_UNQUOTED* -> type(IDENTIFIER)
-    ;
+  : ( DIGITS ( '.' DIGITS? )? | '.' DIGITS ) ( 'E' [-+]? DIGITS )?
+//  | '0x' HEX_DIGIT+
+  ;
 
 
-// White space handling
-WHITESPACE
-    : [ \t\f\r\n]+ -> channel(HIDDEN)
-    ; // Ignore whitespaces.
+//// Special rule that should also match all keywords if they are directly preceded by a dot.
+//// Hence it's defined before all keywords.
+//// Here we make use of the ability in our base lexer to emit multiple tokens with a single rule.
+//DOT_IDENTIFIER
+//    : '.' LETTER_WHEN_UNQUOTED_NO_DIGIT LETTER_WHEN_UNQUOTED* -> type(IDENTIFIER)
+//    ;
 
-// Input not covered elsewhere (unless quoted).
-INVALID_INPUT
-    : [\u0001-\u0008] // Control codes.
-    | '\u000B'        // Line tabulation.
-    | '\u000C'        // Form feed.
-    | [\u000E-\u001F] // More control codes.
-    | '['
-    | ']'
-    ;
 
-// String and text types.
 
-// The underscore charset token is used to defined the repertoire of a string, though it conflicts
-// with normal identifiers, which also can start with an underscore.
-UNDERSCORE_CHARSET
-    : '_' [a-z0-9]+
-    ;
 
-// TODO: check in the semantic phase that starting and ending tags are the same.
-DOLLAR_QUOTED_STRING_TEXT
-   : '$' DOLLAR_QUOTE_TAG_CHAR* '$' .*? '$' DOLLAR_QUOTE_TAG_CHAR* '$' {this.doDollarQuotedStringText()}?;
+//// The underscore charset token is used to defined the repertoire of a string, though it conflicts
+//// with normal identifiers, which also can start with an underscore.
+//UNDERSCORE_CHARSET
+//    : '_' [a-z0-9]+
+//    ;
 
-// Identifiers might start with a digit, even though it is discouraged, and may not consist entirely of digits only.
-// All keywords above are automatically excluded.
-IDENTIFIER
-    : DIGITS+ 'E' (LETTER_WHEN_UNQUOTED_NO_DIGIT LETTER_WHEN_UNQUOTED*)?
-    // Have to exclude float pattern, as this rule matches more.
-    | DIGITS+ LETTER_WITHOUT_FLOAT_PART LETTER_WHEN_UNQUOTED*
-    | LETTER_WHEN_UNQUOTED_NO_DIGIT LETTER_WHEN_UNQUOTED*
-    ; // INT_NUMBER matches first if there are only digits.
+//// Identifiers might start with a digit, even though it is discouraged, and may not consist entirely of digits only.
+//// All keywords above are automatically excluded.
+//IDENTIFIER
+//    : DIGITS+ 'E' (LETTER_WHEN_UNQUOTED_NO_DIGIT LETTER_WHEN_UNQUOTED*)?
+//    // Have to exclude float pattern, as this rule matches more.
+//    | DIGITS+ LETTER_WITHOUT_FLOAT_PART LETTER_WHEN_UNQUOTED*
+//    | LETTER_WHEN_UNQUOTED_NO_DIGIT LETTER_WHEN_UNQUOTED*
+//    ; // INT_NUMBER matches first if there are only digits.
 
-NCHAR_TEXT
-    : 'N' SINGLE_QUOTED_TEXT
-    ;
 
 // MySQL supports automatic concatenation of multiple single and double quoted strings if they follow each other as separate
 // tokens. This is reflected in the `textLiteral` parser rule.
 // Here we handle duplication of quotation chars only (which must be replaced by a single char in the target code).
 
-BACK_TICK_QUOTED_ID
-    : '`' (('\\')? .)*? '`'
-    ;
+//DOUBLE_QUOTED_TEXT
+//    : ( '"' (('\\')? .)*? '"' )+ ;
+//
+//BACK_TICK_QUOTED_ID
+//    : '`' (('\\')? .)*? '`'
+//    ;
 
-DOUBLE_QUOTED_TEXT
-    : ( '"' (('\\')? .)*? '"' )+ ;
+IDENTIFIER
+  : '"' ( ~'"' | '""' )* '"'
+  | '`' ( ~'`' | '``' )* '`'
+//  | [A-Z_\u007F-\uFFFF] [A-Z0-9_$\u007F-\uFFFF]*
+  | ('@'? '@')? [A-Z0-9_$\u007F-\uFFFF]+
+  ;
 
-SINGLE_QUOTED_TEXT
+// TODO from NormalSQL.g4. synthesize these STRING and string rules?
+//STRING
+//  : '\'' ( ~'\'' | '\'\'' )* '\'' ;
+
+STRING
     : ( '\'' (('\\')? .)*? '\'' )+
     ;
+
+NCHAR_TEXT
+    : 'N' STRING
+    ;
+
+// TODO: check in the semantic phase that starting and ending tags are the same.
+DOLLAR_QUOTED_STRING_TEXT
+   : '$' DOLLAR_QUOTE_TAG_CHAR* '$' .*? '$' DOLLAR_QUOTE_TAG_CHAR* '$' ;
+
+
+
 
 // There are 3 types of block comments:
 // /* ... */ - The standard multi line comment.
@@ -5509,45 +4544,32 @@ POUND_COMMENT
     : '#' ~([\n\r])* -> channel(HIDDEN)
     ;
 
-DASHDASH_COMMENT
-    : DOUBLE_DASH ([ \t] (~[\n\r])* | LINEBREAK | EOF) -> channel(HIDDEN)
+DASHES
+    : '--' ([ \t] (~[\n\r])* | [\n\r] | EOF) -> channel(HIDDEN)
     ;
 
-fragment DOUBLE_DASH
-    : '--'
+//COMMENT
+//  : '--' ~[\r\n]* (( '\r'? '\n' ) | EOF ) -> channel(HIDDEN) ;
+
+
+// White space handling
+WHITESPACE
+    : [ \t\f\r\n]+ -> channel(HIDDEN)
     ;
 
-fragment LINEBREAK
-    : [\n\r]
-    ;
+//// Input not covered elsewhere (unless quoted).
+//INVALID_INPUT
+//    : [\u0001-\u0008] // Control codes.
+//    | '\u000B'        // Line tabulation.
+//    | '\u000C'        // Form feed.
+//    | [\u000E-\u001F] // More control codes.
+//    | '['
+//    | ']'
+//    ;
 
-fragment SIMPLE_IDENTIFIER
-    : (DIGIT | [A-Z_$] | '.')+
-    ;
-
-fragment ML_COMMENT_HEAD
-    : '/*'
-    ;
-
-fragment ML_COMMENT_END
-    : '*/'
-    ;
 
 // As defined in https://dev.mysql.com/doc/refman/8.0/en/identifiers.html.
-fragment LETTER_WHEN_UNQUOTED
-    : DIGIT
-    | LETTER_WHEN_UNQUOTED_NO_DIGIT
-    ;
-
-fragment LETTER_WHEN_UNQUOTED_NO_DIGIT
-    : [A-Z_$\u0080-\uffff]
-    ;
 
 fragment DOLLAR_QUOTE_TAG_CHAR
     : [0-9A-Z_\u0080-\uffff]
-    ;
-
-// Any letter but without e/E and digits (which are used to match a decimal number).
-fragment LETTER_WITHOUT_FLOAT_PART
-    : [A-DF-Z_$\u0080-\uffff]
     ;
