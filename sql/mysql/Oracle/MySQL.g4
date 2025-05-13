@@ -3,8 +3,20 @@ grammar MySQL;
 /*
   Copyright 2025 Jason Osgood
 
-  Refactoring MySQL.g4 to adopt NormalSQL's rules, idioms, and style. Goal is to emit
-  a common parse tree across multiple dialects.
+  Refactoring MySQL.g4 to adopt NormalSQL's rules, idioms, and style. Goal is
+  for grammars of misc dialects to all emit the same parse tree (given the
+  same input). A work in progress, as grammars converge over time.
+
+  Prior copyright notices below.
+
+  I'm unsure what license is in effect, so haven't added my own. IIRC, ANTLR4's
+  grammars-v4 project requires MIT.
+
+  FYI, NormalSQL uses APL2. It seemed the default (for Java projects). Having no
+  opinions or preferences, I'll switch licenses as needed. If I continue to use
+  and maintain this fork of grammars-v4, I may adopt same license, just
+  just to keep things more simple for everyone. Would be grateful to have someone,
+  any one, tell me what'd best for everyone.
 
 */
 
@@ -36,53 +48,114 @@ statements
 //    : (statement | beginWork) ';' ;
     : statement? ( ';' statement? )* EOF ;
 
+// TODO: inlining all the statements for now. will re-refactor as needed.
+
 statement
     // DDL
-    : alterStatement
-    | createStatement
-    | dropStatement
-    | renameTableStatement
-    | truncateTableStatement
-    | importStatement
+    : 'ALTER' onlineOption? 'TABLE' qname alterTableActions?
+    | 'ALTER' 'DATABASE' name (createDatabaseOption | 'READ' 'ONLY' '='? ternaryOption)+
+    | 'ALTER' 'PROCEDURE' qname routineCreateOption*
+    | 'ALTER' 'FUNCTION' qname routineCreateOption*
+    | 'ALTER' viewAlgorithm? definerClause? viewSuid? 'VIEW' qname viewTail
+    | 'ALTER' alterEvent
+    | 'ALTER' alterTablespace
+    | 'ALTER' alterUndoTablespace
+    | 'ALTER' 'LOGFILE' 'GROUP' name 'ADD' 'UNDOFILE' textLiteral alterLogfileGroupOptions?
+    | 'SERVER' name serverOptions
+    | 'ALTER' alterInstanceStatement
+    | 'CREATE' 'DATABASE' ifNotExists? name createDatabaseOption*
+    | 'CREATE' 'TEMPORARY'? 'TABLE' ifNotExists? qname ( ('(' tableElementList ')')? createTableOptionsEtc? | 'LIKE' qname | '(' 'LIKE' qname ')' )
+    | 'CREATE' definerClause? 'FUNCTION' ifNotExists? qname '(' ( functionParameter (',' functionParameter)* )? ')' 'RETURNS' typeWithOptCollate routineCreateOption* storedRoutineBody
+    | 'CREATE' definerClause? 'PROCEDURE' ifNotExists? qname '(' ( procedureParameter (',' procedureParameter)* )? ')' routineCreateOption* storedRoutineBody
+    | 'CREATE' 'AGGREGATE'? 'FUNCTION' ifNotExists? name 'RETURNS' ( 'STRING' | 'INT' | 'REAL' | 'DECIMAL' ) 'SONAME' textLiteral
+    | 'CREATE' createLogfileGroup
+    | 'CREATE' viewReplaceOrAlgorithm? definerClause? viewSuid? 'VIEW' qname viewTail
+    | 'CREATE' createTrigger
+    | 'CREATE' createIndex
+    | 'CREATE' createServer
+    | 'CREATE' createTablespace
+    | 'CREATE' createEvent
+    | 'CREATE' 'ROLE' ifNotExists? roleList
+    | 'CREATE' createSpatialReference
+    | 'CREATE' createUndoTablespace
+    | 'DROP' 'DATABASE' ifExists? name
+    | 'DROP' 'EVENT' ifExists? qname
+    | 'DROP' 'FUNCTION' ifExists? qname
+    | 'DROP' 'PROCEDURE' ifExists? qname
+    | 'DROP' onlineOption? 'INDEX' qname 'ON' qname indexLockAndAlgorithm?
+    | 'DROP' dropLogfileGroup
+    | 'DROP' 'SERVER' ifExists? name
+    | 'DROP' dropTable
+    | 'DROP' dropTableSpace
+    | 'DROP' 'TRIGGER' ifExists? qname
+    | 'DROP' 'VIEW' ifExists? qname (',' qname)* ('RESTRICT' | 'CASCADE')?
+    | 'DROP' 'ROLE' ifExists? roleList
+    | 'DROP' 'SPATIAL' 'REFERENCE' 'SYSTEM' ifExists? integer
+    | 'DROP' 'UNDO' 'TABLESPACE' name undoTableSpaceOptions?
+    | 'RENAME' ('TABLE' | 'TABLES') renamePair ( ',' renamePair )*
+    | 'TRUNCATE' 'TABLE'? qname
+    | 'IMPORT' 'TABLE' 'FROM' strings
 
     // DML
-    | callStatement
-    | deleteStatement
-    | doStatement
-    | handlerStatement
-    | insertStatement
+    | 'CALL' qname ('(' (expr (',' expr)*)? ')')?
+    | delete
+    | 'DO' items
+    | 'HANDLER' qname 'OPEN' tableAlias?
+    | 'HANDLER' name ( 'CLOSE' | 'READ' handlerReadOrScan where? limit? )
+    | insert
     | loadStatement
     | replaceStatement
     | select
     | updateStatement
-    | transactionOrLockingStatement
-    | replicationStatement
-    | preparedStatement
+    | 'START' 'TRANSACTION' startTransactionOptionList*
+    | 'COMMIT' 'WORK'? ('AND' 'NO'? 'CHAIN')? ( 'NO'? 'RELEASE' )?
+    | 'SAVEPOINT' name
+    | 'ROLLBACK' 'WORK'? ( 'TO' 'SAVEPOINT'? name | ('AND' 'NO'? 'CHAIN')? ('NO'? 'RELEASE')? )
+    | 'RELEASE' 'SAVEPOINT' name
+    | 'LOCK' ('TABLES' | 'TABLE') lockItem (',' lockItem)*
+    | 'LOCK' 'INSTANCE' 'FOR' 'BACKUP'
+    | 'UNLOCK' ( 'TABLES' | 'TABLE' | 'INSTANCE')
+    | 'XA' ('START' | 'BEGIN') xid ('JOIN' | 'RESUME')?
+    | 'XA' 'END' xid ('SUSPEND' ('FOR' 'MIGRATE')?)?
+    | 'XA' 'PREPARE' xid
+    | 'XA' 'COMMIT' xid ('ONE' 'PHASE')?
+    | 'XA' 'ROLLBACK' xid
+    | 'XA' 'RECOVER' ('CONVERT' 'XID')?
+    | 'PURGE' ('BINARY' | 'MASTER') 'LOGS' ( 'TO' textLiteral | 'BEFORE' expr )
+    | 'CHANGE' ('MASTER' | 'REPLICATION' 'SOURCE') 'TO' sourceDefinitions channel?
+    | 'RESET' resetOption (',' resetOption)*
+    | 'RESET' 'PERSIST' (ifExists 'DEFAULT'? qname)?
+    | 'START' replica replicaThreadOptions? ('UNTIL' replicaUntil)? userOption? passwordOption? defaultAuthOption? pluginDirOption? channel?
+    | 'STOP' replica replicaThreadOptions? channel?
+    | 'CHANGE' 'REPLICATION' 'FILTER' filterDefinition ( ',' filterDefinition )* channel?
+    | 'LOAD' ('DATA' | 'TABLE' qname) 'FROM' 'MASTER'
+    | ('START' groupReplicationStartOptions? | 'STOP') 'GROUP_REPLICATION'
+    | 'PREPARE' name 'FROM' (textLiteral | name)
+    | 'EXECUTE' name ('USING' name ( ',' name )*)?
+    | ('DEALLOCATE' | 'DROP') 'PREPARE' name
 
-    // Data Directory
-    | cloneStatement
+    | 'CLONE' 'LOCAL' 'DATA' 'DIRECTORY' equal? string
+    | 'CLONE' 'REMOTE' ('FOR' 'REPLICATION')?
+    | 'CLONE' 'INSTANCE' 'FROM' user ':' number 'IDENTIFIED' 'BY' string (ssl | 'DATA' 'DIRECTORY' equal? string ssl?)?
 
-    // Database administration
     | accountManagementStatement
     | tableAdministrationStatement
-    | 'UNINSTALL' (
-        'PLUGIN' name
-        | 'COMPONENT' string (',' string)*
-    )
-    | installStatement
-    | setStatement // SET PASSWORD is handled in accountManagementStatement.
-    | showDatabasesStatement
-    | showTablesStatement
-    | showTriggersStatement
-    | showEventsStatement
-    | showTableStatusStatement
-    | showOpenTablesStatement
-    | showParseTreeStatement
-    | showPluginsStatement
+    | 'UNINSTALL' ( 'PLUGIN' name | 'COMPONENT' string (',' string)* )
+    | 'INSTALL' 'PLUGIN' name 'SONAME' string
+    | 'INSTALL' 'COMPONENT' strings ('SET' installSetValue ( ',' installSetValue )*)?
+    | setStatement
+    | 'SHOW' 'DATABASES' like?
+    | 'SHOW' showCommandType? 'TABLES' inDb? like?
+    | 'SHOW' 'FULL'? 'TRIGGERS' inDb? like?
+    | 'SHOW' 'EVENTS' inDb? like?
+    | 'SHOW' 'TABLE' 'STATUS' inDb? like?
+    | 'SHOW' 'OPEN' 'TABLES' inDb? like?
+    | 'SHOW' 'PARSE_TREE' statement
+    | 'SHOW' 'PLUGINS'
     | 'SHOW' 'ENGINE' engineOrAll 'LOGS'
     | 'SHOW' 'ENGINE' engineOrAll 'MUTEX'
     | 'SHOW' 'ENGINE' engineOrAll 'STATUS'
-    | 'SHOW' showCommandType? 'COLUMNS' ('FROM' | 'IN') qname inDb? likeOrWhere?
+    | 'SHOW' showCommandType? 'COLUMNS' ('FROM' | 'IN') qname inDb? like?
     | 'SHOW' ('BINARY' | 'MASTER') 'LOGS'
     | 'SHOW' 'BINARY' 'LOG' 'STATUS'
     | 'SHOW' (replica 'HOSTS' | 'REPLICAS')
@@ -96,82 +169,59 @@ statement
     | 'SHOW' 'ERRORS' limit?
     | 'SHOW' 'PROFILES'
     | 'SHOW' 'PROFILE' profileDefinitions? ( 'FOR' 'QUERY' INT_NUMBER )? limit?
-    | 'SHOW' scope? 'STATUS' likeOrWhere?
-    | showProcessListStatement
-    | showVariablesStatement
-    | showCharacterSetStatement
-    | showCollationStatement
-    | showPrivilegesStatement
-    | showGrantsStatement
-    | showCreateDatabaseStatement
-    | showCreateTableStatement
-    | showCreateViewStatement
-    | showMasterStatusStatement
-    | showReplicaStatusStatement
-    | showCreateProcedureStatement
-    | showCreateFunctionStatement
-    | showCreateTriggerStatement
-    | showCreateProcedureStatusStatement
-    | showCreateFunctionStatusStatement
-    | showCreateProcedureCodeStatement
-    | showCreateFunctionCodeStatement
-    | showCreateEventStatement
-    | showCreateUserStatement
-    | resourceGroupManagement
-    | otherAdministrativeStatement
+    | 'SHOW' scope? 'STATUS' like?
+    | 'SHOW' 'FULL'? 'PROCESSLIST'
+    | 'SHOW' scope? 'VARIABLES' like?
+    | 'SHOW' charset like?
+    | 'SHOW' 'COLLATION' like?
+    | 'SHOW' 'PRIVILEGES'
+    | 'SHOW' 'GRANTS' ('FOR' user ('USING' userList)?)?
+    | 'SHOW' 'CREATE' 'DATABASE' ifNotExists? name
+    | 'SHOW' 'CREATE' 'TABLE' qname
+    | 'SHOW' 'CREATE' 'VIEW' qname
+    | 'SHOW' 'MASTER' 'STATUS'
+    | 'SHOW' replica 'STATUS' channel?
+    | 'SHOW' 'CREATE' 'PROCEDURE' qname
+    | 'SHOW' 'CREATE' 'FUNCTION' qname
+    | 'SHOW' 'CREATE' 'TRIGGER' qname
+    | 'SHOW' 'CREATE' 'PROCEDURE' 'STATUS' like?
+    | 'SHOW' 'CREATE' 'FUNCTION' 'STATUS' like?
+    | 'SHOW' 'CREATE' 'PROCEDURE' 'CODE' qname
+    | 'SHOW' 'CREATE' 'FUNCTION' 'CODE' qname
+    | 'SHOW' 'CREATE' 'EVENT' qname
+    | 'SHOW' 'CREATE' 'USER' user
+    | 'CREATE' 'RESOURCE' 'GROUP' name 'TYPE' equal? ( 'USER' | 'SYSTEM' ) resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable?
+    | 'ALTER' 'RESOURCE' 'GROUP' name resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable? 'FORCE'?
+    | 'SET' 'RESOURCE' 'GROUP' name ('FOR' threadIdList)?
+    | 'DROP' 'RESOURCE' 'GROUP' name 'FORCE'?
+    | 'BINLOG' textLiteral
+    | 'CACHE' 'INDEX' keyCacheListOrParts 'IN' ( name | 'DEFAULT' )
+    | 'FLUSH' noWriteToBinLog? ( flushTables | flushOption (',' flushOption)* )
+    | 'KILL' ('CONNECTION' | 'QUERY')? expr
+    | 'LOAD' 'INDEX' 'INTO' 'CACHE' preloadTail
+    | 'SHUTDOWN'
 
     // MySQL utility statements
-    | utilityStatement
-    | getDiagnosticsStatement
-    | signalStatement
-    ;
-
-alterStatement
-    : 'ALTER'
-        ( onlineOption? 'TABLE' qname alterTableActions?
-        | alterDatabase
-        | 'PROCEDURE' qname (routineCreateOption+)?
-        | 'FUNCTION' qname (routineCreateOption+)?
-        | alterView
-        | alterEvent
-        | alterTablespace
-        | alterUndoTablespace
-        | alterLogfileGroup
-        | 'SERVER' name serverOptions
-        // ALTER USER is part of the user management rule.
-        | alterInstanceStatement
-    )
-    ;
-
-alterDatabase
-    : 'DATABASE' name alterDatabaseOption+
-    ;
-
-alterDatabaseOption
-    : createDatabaseOption
-    | 'READ' 'ONLY' '='? ternaryOption
+    | ('EXPLAIN' | 'DESCRIBE' | 'DESC') qname ( string | qname )?
+    | ('EXPLAIN' | 'DESCRIBE' | 'DESC') explainOptions? ( 'FOR' 'DATABASE' name )? explainableStatement
+    | 'HELP' name
+    | 'USE' name
+    | 'RESTART'
+    | 'GET' ('CURRENT' | 'STACKED')? 'DIAGNOSTICS' ( statementInformationItem (',' statementInformationItem)* | 'CONDITION' qname conditionInformationItem ( ',' conditionInformationItem )* )
+    | ( 'SIGNAL' | 'RESIGNAL' ) (name | sqlstate) ( 'SET' signalInformationItem (',' signalInformationItem)* )?
     ;
 
 alterEvent
-    : definerClause? 'EVENT' qname ('ON' 'SCHEDULE' schedule)? (
-        'ON' 'COMPLETION' 'NOT'? 'PRESERVE'
-    )? ('RENAME' 'TO' name)? (
-        'ENABLE'
-        | 'DISABLE' ('ON' replica)?
-    )? ('COMMENT' textLiteral)? ('DO' compoundStatement)?
-    ;
-
-alterLogfileGroup
-    : 'LOGFILE' 'GROUP' name 'ADD' 'UNDOFILE' textLiteral alterLogfileGroupOptions?
+    : definerClause? 'EVENT' qname ('ON' 'SCHEDULE' schedule)?
+    ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )?
+    ('RENAME' 'TO' name)?
+    ( 'ENABLE' | 'DISABLE' ('ON' replica)? )?
+    ('COMMENT' textLiteral)? ('DO' compoundStatement)?
     ;
 
 alterLogfileGroupOptions
-    : (initialSize
-    | tsOptionEngine
-    | tsOptionWait) (','? (initialSize
-    | tsOptionEngine
-    | tsOptionWait))*
-    ;
+    : (initialSize | tsOptionEngine | tsOptionWait)
+    (','? (initialSize | tsOptionEngine | tsOptionWait))* ;
 
 alterTableActions
     : alterCommandList (partitionClause | removePartitioning)?
@@ -219,13 +269,7 @@ alterPartition
     ;
 
 alterList
-    : (alterListItem | createTableOption+) (
-        ',' (
-            alterListItem
-            | alterCommandsModifier
-            | createTableOption+
-        )
-    )*
+    : (alterListItem | createTableOption+) ( ',' ( alterListItem | alterCommandsModifier | createTableOption+ ) )*
     ;
 
 alterCommandsModifier
@@ -235,57 +279,28 @@ alterCommandsModifier
     ;
 
 alterListItem
-    : 'ADD' 'COLUMN'? (
-        name fieldDefinition checkOrReferences? place?
-        | '(' tableElementList ')'
-    )
+    : 'ADD' 'COLUMN'? ( name fieldDefinition checkOrReferences? place? | '(' tableElementList ')' )
     | 'ADD' tableConstraintDef
     | 'CHANGE' 'COLUMN'? name name fieldDefinition place?
     | 'MODIFY' 'COLUMN'? name fieldDefinition place?
-    | 'DROP' (
-        'COLUMN'? name restrict?
-        | 'FOREIGN' 'KEY' name
-        | 'PRIMARY' 'KEY'
-        | keyOrIndex qname
-        | 'CHECK' name
-        | 'CONSTRAINT' name
-    )
+    | 'DROP' ( 'COLUMN'? name ('RESTRICT' | 'CASCADE')? | 'FOREIGN' 'KEY' name | 'PRIMARY' 'KEY' | keyOrIndex qname | 'CHECK' name | 'CONSTRAINT' name )
     | 'DISABLE' 'KEYS'
     | 'ENABLE' 'KEYS'
-    | 'ALTER' 'COLUMN'? name (
-        'SET' 'DEFAULT' (
-            '(' expr ')'
-            | signedLiteral
-        )
-        | 'DROP' 'DEFAULT'
-        | 'SET' visibility
-    )
+    | 'ALTER' 'COLUMN'? name ( 'SET' 'DEFAULT' ( '(' expr ')' | signedLiteral ) | 'DROP' 'DEFAULT' | 'SET' visibility )
     | 'ALTER' 'INDEX' qname visibility
     | 'ALTER' 'CHECK' name constraintEnforcement
     | 'ALTER' 'CONSTRAINT' name constraintEnforcement
     | 'RENAME' 'COLUMN' name 'TO' name
     | 'RENAME' ('TO' | 'AS')? qname
     | 'RENAME' keyOrIndex qname 'TO' name
-    | 'CONVERT' 'TO' charset (
-        'DEFAULT'
-        | name
-    ) collate?
+    | 'CONVERT' 'TO' charset ( 'DEFAULT' | name ) collate?
     | 'FORCE'
-    | 'ORDER' 'BY' alterOrderList
+    | 'ORDER' 'BY' name direction? (',' name direction?)*
     ;
 
 place
     : 'AFTER' name
     | 'FIRST'
-    ;
-
-restrict
-    : 'RESTRICT'
-    | 'CASCADE'
-    ;
-
-alterOrderList
-    : name direction? (',' name direction?)*
     ;
 
 alterAlgorithmOption
@@ -315,18 +330,12 @@ allOrPartitionNameList
     ;
 
 alterTablespace
-    : 'TABLESPACE' name (
-        ('ADD' | 'DROP') 'DATAFILE' textLiteral alterTablespaceOptions?
-        | 'RENAME' 'TO' name
-        | alterTablespaceOptions
-    )
+    : 'TABLESPACE' name
+    ( ('ADD' | 'DROP') 'DATAFILE' textLiteral alterTablespaceOptions? | 'RENAME' 'TO' name | alterTablespaceOptions )
     ;
 
 alterUndoTablespace
-    : 'UNDO' 'TABLESPACE' name 'SET' (
-        'ACTIVE'
-        | 'INACTIVE'
-    ) undoTableSpaceOptions?
+    : 'UNDO' 'TABLESPACE' name 'SET' ( 'ACTIVE' | 'INACTIVE' ) undoTableSpaceOptions?
     ;
 
 undoTableSpaceOptions
@@ -347,12 +356,6 @@ alterTablespaceOption
     | tsOptionEngineAttribute
     ;
 
-alterView
-    : viewAlgorithm? definerClause? viewSuid? 'VIEW' qname viewTail
-    ;
-
-// This is not the full view_tail from sql_yacc.yy as we have either a view name or a view reference,
-// depending on whether we come from createView or alterView. Everything until this difference is duplicated in those rules.
 viewTail
     : columns? 'AS' viewQueryBlock
     ;
@@ -376,30 +379,10 @@ alterInstanceStatement
 
     ;
 
-createStatement
-    : 'CREATE'
-        ( 'DATABASE' ifNotExists? name createDatabaseOption*
-        | 'TEMPORARY'? 'TABLE' ifNotExists? qname ( ('(' tableElementList ')')? createTableOptionsEtc? | 'LIKE' qname | '(' 'LIKE' qname ')' )
-        | definerClause? 'FUNCTION' ifNotExists? qname '(' ( functionParameter (',' functionParameter)* )? ')' 'RETURNS' typeWithOptCollate routineCreateOption* storedRoutineBody
-        | createProcedure
-        | createUdf
-        | createLogfileGroup
-        | createView
-        | createTrigger
-        | createIndex
-        | createServer
-        | createTablespace
-        | createEvent
-        | createRole
-        | createSpatialReference
-        | createUndoTablespace
-        )
-    ;
-
 createDatabaseOption
-    : defaultCharset
-    | defaultCollation
-    | defaultEncryption
+    : 'DEFAULT'? charset '='? name
+    | 'DEFAULT'? 'COLLATE' '='? name
+    | 'DEFAULT'? 'ENCRYPTION' '='? string
     ;
 
 tableElementList
@@ -415,30 +398,12 @@ duplicateAsQe
     : ('REPLACE' | 'IGNORE')? 'AS'? select
     ;
 
-createProcedure
-    : definerClause? 'PROCEDURE' ifNotExists? qname
-      '(' ( procedureParameter (',' procedureParameter)* )? ')'
-      routineCreateOption* storedRoutineBody
-    ;
-
 storedRoutineBody
     : compoundStatement
     | 'AS' (STRING | DOLLAR_QUOTED_STRING_TEXT)
     ;
 
-createUdf
-    : 'AGGREGATE'? 'FUNCTION' ifNotExists? name 'RETURNS'
-    ( 'STRING' | 'INT' | 'REAL' | 'DECIMAL' )
-    'SONAME' textLiteral
-    ;
-
-// sp_c_chistic in the server grammar.
 routineCreateOption
-    : routineOption
-    | 'NOT'? 'DETERMINISTIC'
-    ;
-
-routineOption
     : 'COMMENT' textLiteral
     | 'LANGUAGE' ( 'SQL' | name )
     | 'NO' 'SQL'
@@ -446,19 +411,21 @@ routineOption
     | 'READS' 'SQL' 'DATA'
     | 'MODIFIES' 'SQL' 'DATA'
     | 'SQL' 'SECURITY' ( 'DEFINER' | 'INVOKER' )
+    | 'NOT'? 'DETERMINISTIC'
     ;
 
 createIndex
-    : onlineOption? (
-        'UNIQUE'? 'INDEX' name indexTypeClause? createIndexTarget indexOption*
+    : onlineOption?
+        ( 'UNIQUE'? 'INDEX' name indexTypeClause? createIndexTarget indexOption*
         | 'FULLTEXT' 'INDEX' name createIndexTarget fulltextIndexOption*
-        | 'SPATIAL' 'INDEX' name createIndexTarget (commonIndexOption)*
-    ) indexLockAndAlgorithm?
+        | 'SPATIAL' 'INDEX' name createIndexTarget commonIndexOption*
+        )
+    indexLockAndAlgorithm?
     ;
 
 indexNameAndType
     : name
-    | (name)? 'USING' indexType
+    | name? 'USING' indexType
     | name 'TYPE' indexType
     ;
 
@@ -583,10 +550,6 @@ tsOptionEngineAttribute
     : 'ENGINE' '='? string
     ;
 
-createView
-    : viewReplaceOrAlgorithm? definerClause? viewSuid? 'VIEW' qname viewTail
-    ;
-
 viewReplaceOrAlgorithm
     : 'OR' 'REPLACE' viewAlgorithm?
     | viewAlgorithm
@@ -613,11 +576,6 @@ createEvent
       ( 'COMMENT' textLiteral )? 'DO' compoundStatement
     ;
 
-createRole
-    // The server grammar has a clear_privileges rule here, which is only used to clear internal state.
-    : 'ROLE' ifNotExists? roleList
-    ;
-
 createSpatialReference
     : 'OR' 'REPLACE' 'SPATIAL' 'REFERENCE' 'SYSTEM' integer srsAttribute*
     | 'SPATIAL' 'REFERENCE' 'SYSTEM' ifNotExists? integer srsAttribute*
@@ -632,29 +590,8 @@ srsAttribute
 
 //----------------------------------------------------------------------------------------------------------------------
 
-dropStatement
-    : 'DROP'
-        ( 'DATABASE' ifExists? name
-        | 'EVENT' ifExists? qname
-        | 'FUNCTION' ifExists? qname
-        | 'PROCEDURE' ifExists? qname
-        | onlineOption? 'INDEX' qname 'ON' qname indexLockAndAlgorithm?
-        | dropLogfileGroup
-        | dropServer
-        | dropTable
-        | dropTableSpace
-        | dropTrigger
-        | dropView
-        | dropRole
-        | dropSpatialReference
-        | dropUndoTablespace
-    )
-    ;
-
 dropLogfileGroup
-    : 'LOGFILE' 'GROUP' name (
-        dropLogfileGroupOption (','? dropLogfileGroupOption)*
-    )?
+    : 'LOGFILE' 'GROUP' name ( dropLogfileGroupOption (','? dropLogfileGroupOption)* )?
     ;
 
 dropLogfileGroupOption
@@ -662,15 +599,8 @@ dropLogfileGroupOption
     | tsOptionEngine
     ;
 
-dropServer
-    : 'SERVER' ifExists? name
-    ;
-
 dropTable
-    : 'TEMPORARY'? ('TABLE' | 'TABLES') ifExists? qnames (
-        'RESTRICT'
-        | 'CASCADE'
-    )?
+    : 'TEMPORARY'? ('TABLE' | 'TABLES') ifExists? qnames ( 'RESTRICT' | 'CASCADE' )?
     ;
 
 dropTableSpace
@@ -679,97 +609,24 @@ dropTableSpace
     )?
     ;
 
-dropTrigger
-    : 'TRIGGER' ifExists? qname
-    ;
-
-dropView
-    : 'VIEW' ifExists? qname (',' qname)* ('RESTRICT' | 'CASCADE')?
-    ;
-
-dropRole
-    : 'ROLE' ifExists? roleList
-    ;
-
-dropSpatialReference
-    : 'SPATIAL' 'REFERENCE' 'SYSTEM' ifExists? integer
-    ;
-
-dropUndoTablespace
-    : 'UNDO' 'TABLESPACE' name undoTableSpaceOptions?
-    ;
-
-//----------------------------------------------------------------------------------------------------------------------
-
-renameTableStatement
-    : 'RENAME' ('TABLE' | 'TABLES') renamePair (
-        ',' renamePair
-    )*
-    ;
-
 renamePair
     : qname 'TO' qname
     ;
 
-//----------------------------------------------------------------------------------------------------------------------
-
-truncateTableStatement
-    : 'TRUNCATE' 'TABLE'? qname
-    ;
-
-//----------------------------------------------------------------------------------------------------------------------
-
-importStatement
-    : 'IMPORT' 'TABLE' 'FROM' strings
-    ;
-
-//--------------- DML statements ---------------------------------------------------------------------------------------
-
-callStatement
-    : 'CALL' qname ('(' (expr (',' expr)*)? ')')?
-    ;
-
-deleteStatement
-    : with? 'DELETE' deleteStatementOption* (
-        'FROM' (
-            tableAliasRefList 'USING' tableReferenceList where? // Multi table variant 1.
-            | qname (tableAlias)? partitionDelete? where? orderBy? simpleLimitClause?
-            // Single table delete.
+delete
+    : with? 'DELETE' 'LOW_PRIORITY'? 'QUICK'? 'IGNORE'?
+        ( 'FROM' qname tableAlias? ('PARTITION' '(' name (',' name)* ')')? where? orderBy? limitCount?
+        | wild ( ',' wild )* 'FROM' tableReferenceList where?
+        | 'FROM' wild ( ',' wild )* 'USING' tableReferenceList where?
         )
-        | tableAliasRefList 'FROM' tableReferenceList where? // Multi table variant 2.
-    )
     ;
 
-partitionDelete
-    : 'PARTITION' '(' name (',' name)* ')'
-    ;
 
-deleteStatementOption
-    : // opt_delete_option in sql_yacc.yy, but the name collides with another rule (delete_options).
-    'QUICK'
-    | 'LOW_PRIORITY'
-    | 'QUICK'
-    | 'IGNORE'
-    ;
-
-doStatement
-    : 'DO' items
-    ;
-
-handlerStatement
-    : 'HANDLER' (
-        qname 'OPEN' tableAlias?
-        | name (
-            'CLOSE'
-            | 'READ' handlerReadOrScan where? limit?
-        )
-    )
-    ;
+    wild : qname ( '.' '*' )? ;
 
 handlerReadOrScan
-    : ('FIRST' | 'NEXT') // Scan function.
+    : ('FIRST' | 'NEXT')
     | name (
-        // The rkey part.
         ('FIRST' | 'NEXT' | 'PREV' | 'LAST')
         | (
             '='
@@ -777,36 +634,23 @@ handlerReadOrScan
             | '>'
             | '<='
             | '>='
-        ) '(' values ')'
+        ) '(' terms ')'
     )
     ;
 
-//----------------------------------------------------------------------------------------------------------------------
-
-insertStatement
-    : 'INSERT' insertLockOption? 'IGNORE'? 'INTO'? qname usePartition? (
-        insertFromConstructor valuesReference?
-        | 'SET' updateList valuesReference?
-        | insertQueryExpression
-    ) insertUpdateList?
-    ;
-
-insertLockOption
-    : 'LOW_PRIORITY'
-    | 'DELAYED' // Only allowed if no select is used. Check in the semantic phase.
-    | 'HIGH_PRIORITY'
+insert
+    : 'INSERT' ('LOW_PRIORITY' | 'DELAYED' | 'HIGH_PRIORITY')?
+      'IGNORE'? 'INTO'? qname usePartition?
+      ( insertFromConstructor valuesReference? | 'SET' updateList valuesReference? | insertQueryExpression )
+      insertUpdateList?
     ;
 
 insertFromConstructor
-    : ('(' fields? ')')? insertValues
+    : ('(' fields? ')')? ('VALUES' | 'VALUE') valueList
     ;
 
 fields
     : insertIdentifier (',' insertIdentifier)*
-    ;
-
-insertValues
-    : ('VALUES' | 'VALUE') valueList
     ;
 
 insertQueryExpression
@@ -816,12 +660,9 @@ insertQueryExpression
     ;
 
 valueList
-    : '(' values? ')' (
-        ',' '(' values? ')'
-    )*
-    ;
+    : '(' terms? ')' ( ',' '(' terms? ')' )* ;
 
-values
+terms
     : (expr | 'DEFAULT') (',' (expr | 'DEFAULT'))*
     ;
 
@@ -833,72 +674,21 @@ insertUpdateList
     : 'ON' 'DUPLICATE' 'KEY' 'UPDATE' updateList
     ;
 
-//----------------------------------------------------------------------------------------------------------------------
-
 loadStatement
-    : 'LOAD' dataOrXml loadDataLock? 'FROM'? 'LOCAL'? loadSourceType? string sourceCount? sourceOrder? (
-        'REPLACE'
-        | 'IGNORE'
-    )? 'INTO' 'TABLE' qname usePartition? (charset)? xmlRowsIdentifiedBy? fieldsClause? linesClause?
-        loadDataFileTail loadParallel? loadMemory? loadAlgorithm?
-    ;
-
-dataOrXml
-    : 'DATA'
-    | 'XML'
-    ;
-
-loadDataLock
-    : 'LOW_PRIORITY'
-    | 'CONCURRENT'
-    ;
-
-loadSourceType
-    : 'INFILE'
-    | ('URL' | 'S3')
-    ;
-
-sourceCount
-    : (
-        'COUNT' INT_NUMBER
-        | IDENTIFIER INT_NUMBER
-    )
-    ;
-
-sourceOrder
-    : 'IN' 'PRIMARY' 'KEY' 'ORDER'
-    ;
-
-xmlRowsIdentifiedBy
-    : 'ROWS' 'IDENTIFIED' 'BY' string
-    ;
-
-loadDataFileTail
-    : ('IGNORE' INT_NUMBER ('LINES' | 'ROWS'))?
+    : 'LOAD' ('DATA' | 'XML') ('LOW_PRIORITY' | 'CONCURRENT')?
+      'FROM'? 'LOCAL'? ('INFILE' | ('URL' | 'S3'))? string ('COUNT' INT_NUMBER | IDENTIFIER INT_NUMBER)?
+      ('IN' 'PRIMARY' 'KEY' 'ORDER')?
+      ( 'REPLACE' | 'IGNORE' )?
+      'INTO' 'TABLE' qname usePartition? (charset)? ('ROWS' 'IDENTIFIED' 'BY' string)?
+      fieldsClause? linesClause?
+      ('IGNORE' INT_NUMBER ('LINES' | 'ROWS'))?
       ('(' (name ( ',' name )*)? ')')?
-      ( 'SET' updateList )?
+      ( 'SET' updateList )? ('PARALLEL' '=' INT_NUMBER)? ('MEMORY' '=' sizeNumber)? ('ALGORITHM' '=' 'BULK')?
     ;
 
-loadAlgorithm
-    : 'ALGORITHM' '=' 'BULK'
-    ;
-
-loadParallel
-    : 'PARALLEL' '=' INT_NUMBER
-    ;
-
-loadMemory
-    : 'MEMORY' '=' sizeNumber
-    ;
-
-//----------------------------------------------------------------------------------------------------------------------
 
 replaceStatement
-    : 'REPLACE' ('LOW_PRIORITY' | 'DELAYED')? 'INTO'? qname usePartition? (
-        insertFromConstructor
-        | 'SET' updateList
-        | insertQueryExpression
-    )
+    : 'REPLACE' ('LOW_PRIORITY' | 'DELAYED')? 'INTO'? qname usePartition? ( insertFromConstructor | 'SET' updateList | insertQueryExpression )
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -990,8 +780,8 @@ limit
     : 'LIMIT' limitOptions
     ;
 
-simpleLimitClause
-    : 'LIMIT' limitOption
+limitCount
+    : 'LIMIT' INT_NUMBER
     ;
 
 limitOptions
@@ -1125,11 +915,11 @@ tableReference
     ;
 
 rowValueExplicit
-    : 'ROW' '(' values? ')'
+    : 'ROW' '(' terms? ')'
     ;
 
 lockingClause
-    : 'FOR' ( 'UPDATE' | 'SHARE' ) ('OF' tableAliasRefList)? ( 'SKIP' 'LOCKED' | 'NOWAIT' )?
+    : 'FOR' ( 'UPDATE' | 'SHARE' ) ('OF' qnames)? ( 'SKIP' 'LOCKED' | 'NOWAIT' )?
     | 'LOCK' 'IN' 'SHARE' 'MODE'
     ;
 
@@ -1253,7 +1043,8 @@ unionOption
     ;
 
 tableAlias
-    : ('AS' | '=')? name
+//    : ('AS' | '=')? name
+    : 'AS'? name
     ;
 
 indexHintList
@@ -1297,25 +1088,10 @@ indexListElement
 
 updateStatement
     : with? 'UPDATE' 'LOW_PRIORITY'? 'IGNORE'? tableReferenceList 'SET' updateList where?
-        orderBy? simpleLimitClause?
+        orderBy? limitCount?
     ;
 
 //----------------------------------------------------------------------------------------------------------------------
-
-transactionOrLockingStatement
-    : transactionStatement
-    | savepointStatement
-    | lockStatement
-    | xaStatement
-    ;
-
-transactionStatement
-    : 'START' 'TRANSACTION' startTransactionOptionList*
-    | 'COMMIT' 'WORK'? ('AND' 'NO'? 'CHAIN')? (
-        'NO'? 'RELEASE'
-    )?
-    // SET TRANSACTION is part of setStatement.
-    ;
 
 // BEGIN WORK is separated from transactional statements as it must not appear as part of a stored program.
 beginWork
@@ -1327,21 +1103,6 @@ startTransactionOptionList
     | 'READ' ('WRITE' | 'ONLY')
     ;
 
-savepointStatement
-    : 'SAVEPOINT' name
-    | 'ROLLBACK' 'WORK'? (
-        'TO' 'SAVEPOINT'? name
-        | ('AND' 'NO'? 'CHAIN')? ('NO'? 'RELEASE')?
-    )
-    | 'RELEASE' 'SAVEPOINT' name
-    ;
-
-lockStatement
-    : 'LOCK' ('TABLES' | 'TABLE') lockItem (',' lockItem)*
-    | 'LOCK' 'INSTANCE' 'FOR' 'BACKUP'
-    | 'UNLOCK' ( 'TABLES' | 'TABLE' | 'INSTANCE')
-    ;
-
 lockItem
     : qname tableAlias? lockOption
     ;
@@ -1351,37 +1112,8 @@ lockOption
     | 'LOW_PRIORITY'? 'WRITE' // low priority deprecated since 5.7
     ;
 
-xaStatement
-    : 'XA' (
-        ('START' | 'BEGIN') xid ('JOIN' | 'RESUME')?
-        | 'END' xid ('SUSPEND' ('FOR' 'MIGRATE')?)?
-        | 'PREPARE' xid
-        | 'COMMIT' xid ('ONE' 'PHASE')?
-        | 'ROLLBACK' xid
-        | 'RECOVER' xaConvert?
-    )
-    ;
-
-xaConvert
-    : 'CONVERT' 'XID'
-    ;
-
 xid
     : string (',' string (',' number)?)?
-    ;
-
-//----------------------------------------------------------------------------------------------------------------------
-
-replicationStatement
-    : 'PURGE' ('BINARY' | 'MASTER') 'LOGS' ( 'TO' textLiteral | 'BEFORE' expr )
-    | 'CHANGE' ('MASTER' | 'REPLICATION' 'SOURCE') 'TO' sourceDefinitions channel?
-    | 'RESET' resetOption (',' resetOption)*
-    | 'RESET' 'PERSIST' (ifExists 'DEFAULT'? qname)?
-    | startReplicaStatement
-    | stopReplicaStatement
-    | changeReplication
-    | replicationLoad
-    | groupReplication
     ;
 
 resetOption
@@ -1389,273 +1121,91 @@ resetOption
     | replica 'ALL'? channel?
     ;
 
-replicationLoad
-    : 'LOAD' ('DATA' | 'TABLE' qname) 'FROM' 'MASTER'
-    ;
-
 sourceDefinitions
     : sourceDefinition (',' sourceDefinition)*
     ;
 
 sourceDefinition
-    : // source_def in sql_yacc.yy
-    changeReplicationSourceHost '=' string
+    : ('MASTER_HOST'
+    | 'SOURCE_HOST') '=' string
     | 'NETWORK_NAMESPACE' '=' string
-    | changeReplicationSourceBind '=' string
-    | changeReplicationSourceUser '=' string
-    | changeReplicationSourcePassword '=' string
-    | changeReplicationSourcePort '=' number
-    | changeReplicationSourceConnectRetry '=' number
-    | changeReplicationSourceRetryCount '=' number
-    | changeReplicationSourceDelay '=' number
-    | changeReplicationSourceSSL '=' number
-    | changeReplicationSourceSSLCA '=' string
-    | changeReplicationSourceSSLCApath '=' string
-    | changeReplicationSourceTLSVersion '=' string
-    | changeReplicationSourceSSLCert '=' string
-    | changeReplicationSourceTLSCiphersuites '=' sourceTlsCiphersuitesDef
-    | changeReplicationSourceSSLCipher '=' string
-    | changeReplicationSourceSSLKey '=' string
-    | changeReplicationSourceSSLVerifyServerCert '=' number
-    | changeReplicationSourceSSLCLR '=' textLiteral
-    | changeReplicationSourceSSLCLRpath '=' string
-    | changeReplicationSourcePublicKey '=' string
-    | changeReplicationSourceGetSourcePublicKey '=' number
-    | changeReplicationSourceHeartbeatPeriod '=' number
-    | 'IGNORE_SERVER_IDS' '=' serverIdList
-    | changeReplicationSourceCompressionAlgorithm '=' string
-    | changeReplicationSourceZstdCompressionLevel '=' number
-    | changeReplicationSourceAutoPosition '=' number
-    | 'PRIVILEGE_CHECKS_USER' '=' privilegeCheckDef
+    | ('MASTER_BIND'
+    | 'SOURCE_BIND') '=' string
+    | ('MASTER_USER'
+    | 'SOURCE_USER') '=' string
+    | ('MASTER_PASSWORD'
+    | 'SOURCE_PASSWORD') '=' string
+    | ('MASTER_PORT'
+    | 'SOURCE_PORT') '=' number
+    | ('MASTER_CONNECT_RETRY'
+    | 'SOURCE_CONNECT_RETRY') '=' number
+    | ('MASTER_RETRY_COUNT'
+    | 'SOURCE_RETRY_COUNT') '=' number
+    | ('MASTER_DELAY'
+    | 'SOURCE_DELAY') '=' number
+    | ('MASTER_SSL'
+    | 'SOURCE_SSL') '=' number
+    | ('MASTER_SSL_CA'
+    | 'SOURCE_SSL_CA') '=' string
+    | ('MASTER_SSL_CAPATH'
+    | 'SOURCE_SSL_CAPATH') '=' string
+    | ('MASTER_TLS_VERSION'
+    | 'SOURCE_TLS_VERSION') '=' string
+    | ('MASTER_SSL_CERT'
+    | 'SOURCE_SSL_CERT') '=' string
+    | ('MASTER_TLS_CIPHERSUITES'
+    | 'SOURCE_TLS_CIPHERSUITES') '=' (string | 'NULL')
+    | ('MASTER_SSL_CIPHER'
+    | 'SOURCE_SSL_CIPHER') '=' string
+    | ('MASTER_SSL_KEY'
+    | 'SOURCE_SSL_KEY') '=' string
+    | ('MASTER_SSL_VERIFY_SERVER_CERT'
+    | 'SOURCE_SSL_VERIFY_SERVER_CERT') '=' number
+    | ('MASTER_SSL_CRL'
+    | 'SOURCE_SSL_CRL') '=' textLiteral
+    | ('MASTER_SSL_CRLPATH'
+    | 'SOURCE_SSL_CRLPATH') '=' string
+    | ('MASTER_PUBLIC_KEY_PATH'
+    | 'SOURCE_PUBLIC_KEY_PATH') '=' string
+    | ('GET_MASTER_PUBLIC_KEY'
+    | 'GET_SOURCE_PUBLIC_KEY') '=' number
+    | ('MASTER_HEARTBEAT_PERIOD'
+    | 'SOURCE_HEARTBEAT_PERIOD') '=' number
+    | 'IGNORE_SERVER_IDS' '=' '(' (number (',' number)*)? ')'
+    | ('MASTER_COMPRESSION_ALGORITHM'
+    | 'SOURCE_COMPRESSION_ALGORITHM') '=' string
+    | ('MASTER_ZSTD_COMPRESSION_LEVEL'
+    | 'SOURCE_ZSTD_COMPRESSION_LEVEL') '=' number
+    | ('MASTER_AUTO_POSITION'
+    | 'SOURCE_AUTO_POSITION') '=' number
+    | 'PRIVILEGE_CHECKS_USER' '=' (userName | 'NULL')
     | 'REQUIRE_ROW_FORMAT' '=' number
-    | 'REQUIRE_TABLE_PRIMARY_KEY_CHECK' '=' tablePrimaryKeyCheckDef
+    | 'REQUIRE_TABLE_PRIMARY_KEY_CHECK' '=' ('STREAM' | 'ON' | 'OFF' | 'GENERATE')
     | 'SOURCE_CONNECTION_AUTO_FAILOVER' '=' integer
-    | 'ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS' '='
-        assignGtidsToAnonymousTransactionsDefinition
+    | 'ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS' '=' ('OFF' | 'LOCAL' | string)
     | 'GTID_ONLY' '=' integer
     | sourceFileDef
     ;
 
-changeReplicationSourceAutoPosition
-    : 'MASTER_AUTO_POSITION'
-    | 'SOURCE_AUTO_POSITION'
-    ;
-
-changeReplicationSourceHost
-    : 'MASTER_HOST'
-    | 'SOURCE_HOST'
-    ;
-
-changeReplicationSourceBind
-    : 'MASTER_BIND'
-    | 'SOURCE_BIND'
-    ;
-
-changeReplicationSourceUser
-    : 'MASTER_USER'
-    | 'SOURCE_USER'
-    ;
-
-changeReplicationSourcePassword
-    : 'MASTER_PASSWORD'
-    | 'SOURCE_PASSWORD'
-    ;
-
-changeReplicationSourcePort
-    : 'MASTER_PORT'
-    | 'SOURCE_PORT'
-    ;
-
-changeReplicationSourceConnectRetry
-    : 'MASTER_CONNECT_RETRY'
-    | 'SOURCE_CONNECT_RETRY'
-    ;
-
-changeReplicationSourceRetryCount
-    : 'MASTER_RETRY_COUNT'
-    | 'SOURCE_RETRY_COUNT'
-    ;
-
-changeReplicationSourceDelay
-    : 'MASTER_DELAY'
-    | 'SOURCE_DELAY'
-    ;
-
-changeReplicationSourceSSL
-    : 'MASTER_SSL'
-    | 'SOURCE_SSL'
-    ;
-
-changeReplicationSourceSSLCA
-    : 'MASTER_SSL_CA'
-    | 'SOURCE_SSL_CA'
-    ;
-
-changeReplicationSourceSSLCApath
-    : 'MASTER_SSL_CAPATH'
-    | 'SOURCE_SSL_CAPATH'
-    ;
-
-changeReplicationSourceSSLCipher
-    : 'MASTER_SSL_CIPHER'
-    | 'SOURCE_SSL_CIPHER'
-    ;
-
-changeReplicationSourceSSLCLR
-    : 'MASTER_SSL_CRL'
-    | 'SOURCE_SSL_CRL'
-    ;
-
-changeReplicationSourceSSLCLRpath
-    : 'MASTER_SSL_CRLPATH'
-    | 'SOURCE_SSL_CRLPATH'
-    ;
-
-changeReplicationSourceSSLKey
-    : 'MASTER_SSL_KEY'
-    | 'SOURCE_SSL_KEY'
-    ;
-
-changeReplicationSourceSSLVerifyServerCert
-    : 'MASTER_SSL_VERIFY_SERVER_CERT'
-    | 'SOURCE_SSL_VERIFY_SERVER_CERT'
-    ;
-
-changeReplicationSourceTLSVersion
-    : 'MASTER_TLS_VERSION'
-    | 'SOURCE_TLS_VERSION'
-    ;
-
-changeReplicationSourceTLSCiphersuites
-    : 'MASTER_TLS_CIPHERSUITES'
-    | 'SOURCE_TLS_CIPHERSUITES'
-    ;
-
-changeReplicationSourceSSLCert
-    : 'MASTER_SSL_CERT'
-    | 'SOURCE_SSL_CERT'
-    ;
-
-changeReplicationSourcePublicKey
-    : 'MASTER_PUBLIC_KEY_PATH'
-    | 'SOURCE_PUBLIC_KEY_PATH'
-    ;
-
-changeReplicationSourceGetSourcePublicKey
-    : 'GET_MASTER_PUBLIC_KEY'
-    | 'GET_SOURCE_PUBLIC_KEY'
-    ;
-
-changeReplicationSourceHeartbeatPeriod
-    : 'MASTER_HEARTBEAT_PERIOD'
-    | 'SOURCE_HEARTBEAT_PERIOD'
-    ;
-
-changeReplicationSourceCompressionAlgorithm
-    : 'MASTER_COMPRESSION_ALGORITHM'
-    | 'SOURCE_COMPRESSION_ALGORITHM'
-    ;
-
-changeReplicationSourceZstdCompressionLevel
-    : 'MASTER_ZSTD_COMPRESSION_LEVEL'
-    | 'SOURCE_ZSTD_COMPRESSION_LEVEL'
-    ;
-
-privilegeCheckDef
-    : userName
-    | 'NULL'
-    ;
-
-tablePrimaryKeyCheckDef
-    : 'STREAM'
-    | 'ON'
-    | 'OFF'
-    | 'GENERATE'
-    ;
-
-assignGtidsToAnonymousTransactionsDefinition
-    : 'OFF'
-    | 'LOCAL'
-    | string
-    ;
-
-sourceTlsCiphersuitesDef
-    : string
-    | 'NULL'
-    ;
-
 sourceFileDef
-    : sourceLogFile '=' string
-    | sourceLogPos '=' number
+    : ('MASTER_LOG_FILE' | 'SOURCE_LOG_FILE') '=' string
+    | ('MASTER_LOG_POS' | 'SOURCE_LOG_POS') '=' number
     | 'RELAY_LOG_FILE' '=' string
     | 'RELAY_LOG_POS' '=' number
     ;
 
-sourceLogFile
-    : 'MASTER_LOG_FILE'
-    | 'SOURCE_LOG_FILE'
-    ;
-
-sourceLogPos
-    : 'MASTER_LOG_POS'
-    | 'SOURCE_LOG_POS'
-    ;
-
-serverIdList
-    : '(' (number (',' number)*)? ')'
-    ;
-
-changeReplication
-    : 'CHANGE' 'REPLICATION' 'FILTER' filterDefinition (
-        ',' filterDefinition
-    )* channel?
-    ;
-
 filterDefinition
-    : 'REPLICATE_DO_DB' '=' '(' filterDbList? ')'
-    | 'REPLICATE_IGNORE_DB' '=' '(' filterDbList? ')'
-    | 'REPLICATE_DO_TABLE' '=' '(' filterTableList? ')'
-    | 'REPLICATE_IGNORE_TABLE' '=' '(' filterTableList? ')'
-    | 'REPLICATE_WILD_DO_TABLE' '=' '(' filterStringList? ')'
-    | 'REPLICATE_WILD_IGNORE_TABLE' '=' '(' filterStringList? ')'
-    | 'REPLICATE_REWRITE_DB' '=' '(' filterDbPairList? ')'
-    ;
-
-filterDbList
-    : name (',' name)*
-    ;
-
-filterTableList
-    : qname (',' qname)*
-    ;
-
-filterStringList
-    : filterWildDbTableString (',' filterWildDbTableString)*
-    ;
-
-filterWildDbTableString
-    : string // sql_yacc.yy checks for the existance of at least one dot char in the string.
-    ;
-
-filterDbPairList
-    : schemaIdentifierPair (',' schemaIdentifierPair)*
-    ;
-
-startReplicaStatement
-    : 'START' replica replicaThreadOptions? ('UNTIL' replicaUntil)? userOption? passwordOption? defaultAuthOption?
-        pluginDirOption? channel?
-    ;
-
-stopReplicaStatement
-    : 'STOP' replica replicaThreadOptions? channel?
+    : 'REPLICATE_DO_DB' '=' '(' (name (',' name)*)? ')'
+    | 'REPLICATE_IGNORE_DB' '=' '(' (name (',' name)*)? ')'
+    | 'REPLICATE_DO_TABLE' '=' '(' (qname (',' qname)*)? ')'
+    | 'REPLICATE_IGNORE_TABLE' '=' '(' (qname (',' qname)*)? ')'
+    | 'REPLICATE_WILD_DO_TABLE' '=' '(' (string (',' string)*)? ')'
+    | 'REPLICATE_WILD_IGNORE_TABLE' '=' '(' (string (',' string)*)? ')'
+    | 'REPLICATE_REWRITE_DB' '=' '(' (schemaIdentifierPair (',' schemaIdentifierPair)*)? ')'
     ;
 
 replicaUntil
-    : (
-        sourceFileDef
-        | ('SQL_BEFORE_GTIDS' | 'SQL_AFTER_GTIDS') '=' string
-        | 'SQL_AFTER_MTS_GAPS'
-    ) (',' sourceFileDef)*
+    : ( sourceFileDef | ('SQL_BEFORE_GTIDS' | 'SQL_AFTER_GTIDS') '=' string | 'SQL_AFTER_MTS_GAPS' ) (',' sourceFileDef)*
     ;
 
 userOption
@@ -1683,72 +1233,24 @@ replicaThreadOption
     | 'RELAY_THREAD'
     ;
 
-groupReplication
-    : ('START' groupReplicationStartOptions? | 'STOP') 'GROUP_REPLICATION'
-    ;
-
 groupReplicationStartOptions
     : groupReplicationStartOption (',' groupReplicationStartOption)*
     ;
 
 groupReplicationStartOption
-    : groupReplicationUser
-    | groupReplicationPassword
-    | groupReplicationPluginAuth
-    ;
-
-groupReplicationUser
     : 'USER' '=' string
-    ;
-
-groupReplicationPassword
-    : 'PASSWORD' '=' string
-    ;
-
-groupReplicationPluginAuth
-    : 'DEFAULT_AUTH' '=' string
+    | 'PASSWORD' '=' string
+    | 'DEFAULT_AUTH' '=' string
     ;
 
 replica
-    : // Part of the terminology cleanup starting with 8.0.24.
-    'SLAVE'
-    | 'REPLICA'
-    ;
-
-//----------------------------------------------------------------------------------------------------------------------
-
-preparedStatement
-    : 'PREPARE' name 'FROM' (textLiteral | name)
-    | executeStatement
-    | ('DEALLOCATE' | 'DROP') 'PREPARE' name
-    ;
-
-executeStatement
-    : 'EXECUTE' name ('USING' name ( ',' name )*)?
-    ;
-
-//----------------------------------------------------------------------------------------------------------------------
-
-cloneStatement
-    : 'CLONE' (
-        'LOCAL' 'DATA' 'DIRECTORY' equal? string
-        // Clone remote has been removed in 8.0.14. This alt is taken out by the conditional 'REMOTE'.
-        | 'REMOTE' ('FOR' 'REPLICATION')?
-        | 'INSTANCE' 'FROM' user ':' number 'IDENTIFIED' 'BY'
-            string dataDirSSL?
-    )
-    ;
-
-dataDirSSL
-    : ssl
-    | 'DATA' 'DIRECTORY' equal? string ssl?
+    : 'SLAVE' | 'REPLICA'
     ;
 
 ssl
     : 'REQUIRE' 'NO'? 'SSL'
     ;
 
-//----------------------------------------------------------------------------------------------------------------------
 
 // Note: SET PASSWORD is part of the SET statement.
 accountManagementStatement
@@ -1790,11 +1292,11 @@ alterUser
     ;
 
 oldAlterUser
-    : user 'IDENTIFIED' 'BY' (
-        string 'REPLACE' string retainCurrentPassword?
+    : user 'IDENTIFIED' 'BY'
+        ( string 'REPLACE' string retainCurrentPassword?
         | string retainCurrentPassword?
         | 'RANDOM' 'PASSWORD' ('REPLACE' string)? retainCurrentPassword?
-    )
+        )
     | user 'IDENTIFIED' 'WITH' (
         name (
             'BY' string 'REPLACE' string retainCurrentPassword?
@@ -2017,9 +1519,8 @@ repairType
 //----------------------------------------------------------------------------------------------------------------------
 
 installStatement
-    : 'INSTALL' ( 'PLUGIN' name 'SONAME' string | 'COMPONENT' strings ('SET' installSetValue (
-        ',' installSetValue
-    )*)? )
+    : 'INSTALL' 'PLUGIN' name 'SONAME' string
+    | 'INSTALL' 'COMPONENT' strings ('SET' installSetValue ( ',' installSetValue )*)?
     ;
 
 installSetRvalue
@@ -2032,7 +1533,6 @@ installSetValue
     : ('GLOBAL' | 'PERSIST') lvalueVariable equal installSetRvalue
     ;
 
-//----------------------------------------------------------------------------------------------------------------------
 
 setStatement
     : 'SET'
@@ -2069,119 +1569,6 @@ optionValueNoOptionType
     | 'NAMES' ( equal expr | name collate? | 'DEFAULT' )
     ;
 
-//----------------------------------------------------------------------------------------------------------------------
-
-showDatabasesStatement
-    : 'SHOW' 'DATABASES' likeOrWhere?
-    ;
-
-showTablesStatement
-    : 'SHOW' showCommandType? 'TABLES' inDb? likeOrWhere?
-    ;
-
-showTriggersStatement
-    : 'SHOW' 'FULL'? 'TRIGGERS' inDb? likeOrWhere?
-    ;
-
-showEventsStatement
-    : 'SHOW' 'EVENTS' inDb? likeOrWhere?
-    ;
-
-showTableStatusStatement
-    : 'SHOW' 'TABLE' 'STATUS' inDb? likeOrWhere?
-    ;
-
-showOpenTablesStatement
-    : 'SHOW' 'OPEN' 'TABLES' inDb? likeOrWhere?
-    ;
-
-showParseTreeStatement
-    : 'SHOW' 'PARSE_TREE' statement
-    ;
-
-showPluginsStatement
-    : 'SHOW' 'PLUGINS'
-    ;
-
-showProcessListStatement
-    : 'SHOW' 'FULL'? 'PROCESSLIST'
-    ;
-
-showVariablesStatement
-    : 'SHOW' scope? 'VARIABLES' likeOrWhere?
-    ;
-
-showCharacterSetStatement
-    : 'SHOW' charset likeOrWhere?
-    ;
-
-showCollationStatement
-    : 'SHOW' 'COLLATION' likeOrWhere?
-    ;
-
-showPrivilegesStatement
-    : 'SHOW' 'PRIVILEGES'
-    ;
-
-showGrantsStatement
-    : 'SHOW' 'GRANTS' ('FOR' user ('USING' userList)?)?
-    ;
-
-showCreateDatabaseStatement
-    : 'SHOW' 'CREATE' 'DATABASE' ifNotExists? name
-    ;
-
-showCreateTableStatement
-    : 'SHOW' 'CREATE' 'TABLE' qname
-    ;
-
-showCreateViewStatement
-    : 'SHOW' 'CREATE' 'VIEW' qname
-    ;
-
-showMasterStatusStatement
-    : 'SHOW' 'MASTER' 'STATUS'
-    ;
-
-showReplicaStatusStatement
-    : 'SHOW' replica 'STATUS' channel?
-    ;
-
-showCreateProcedureStatement
-    : 'SHOW' 'CREATE' 'PROCEDURE' qname
-    ;
-
-showCreateFunctionStatement
-    : 'SHOW' 'CREATE' 'FUNCTION' qname
-    ;
-
-showCreateTriggerStatement
-    : 'SHOW' 'CREATE' 'TRIGGER' qname
-    ;
-
-showCreateProcedureStatusStatement
-    : 'SHOW' 'CREATE' 'PROCEDURE' 'STATUS' likeOrWhere?
-    ;
-
-showCreateFunctionStatusStatement
-    : 'SHOW' 'CREATE' 'FUNCTION' 'STATUS' likeOrWhere?
-    ;
-
-showCreateProcedureCodeStatement
-    : 'SHOW' 'CREATE' 'PROCEDURE' 'CODE' qname
-    ;
-
-showCreateFunctionCodeStatement
-    : 'SHOW' 'CREATE' 'FUNCTION' 'CODE' qname
-    ;
-
-showCreateEventStatement
-    : 'SHOW' 'CREATE' 'EVENT' qname
-    ;
-
-showCreateUserStatement
-    : 'SHOW' 'CREATE' 'USER' user
-    ;
 
 showCommandType
     : 'FULL'
@@ -2218,23 +1605,6 @@ profileDefinition
         | 'SOURCE'
         | 'SWAPS'
     )
-    ;
-
-//----------------------------------------------------------------------------------------------------------------------
-
-otherAdministrativeStatement
-    : 'BINLOG' textLiteral
-    | 'CACHE' 'INDEX' keyCacheListOrParts 'IN' (
-        name
-        | 'DEFAULT'
-    )
-    | 'FLUSH' noWriteToBinLog? (
-        flushTables
-        | flushOption (',' flushOption)*
-    )
-    | 'KILL' ('CONNECTION' | 'QUERY')? expr
-    | 'LOAD' 'INDEX' 'INTO' 'CACHE' preloadTail
-    | 'SHUTDOWN'
     ;
 
 keyCacheListOrParts
@@ -2318,20 +1688,6 @@ adminPartition
 
 //----------------------------------------------------------------------------------------------------------------------
 
-resourceGroupManagement
-    : createResourceGroup
-    | alterResourceGroup
-    | setResourceGroup
-    | dropResourceGroup
-    ;
-
-createResourceGroup
-    : 'CREATE' 'RESOURCE' 'GROUP' name 'TYPE' equal? (
-        'USER'
-        | 'SYSTEM'
-    ) resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable?
-    ;
-
 resourceGroupVcpuList
     : 'VCPU' equal? vcpuNumOrRange (','? vcpuNumOrRange)*
     ;
@@ -2349,45 +1705,11 @@ resourceGroupEnableDisable
     | 'DISABLE'
     ;
 
-alterResourceGroup
-    : 'ALTER' 'RESOURCE' 'GROUP' name resourceGroupVcpuList? resourceGroupPriority?
-        resourceGroupEnableDisable? 'FORCE'?
-    ;
-
-setResourceGroup
-    : 'SET' 'RESOURCE' 'GROUP' name ('FOR' threadIdList)?
-    ;
-
 threadIdList
     : integer (','? integer)*
     ;
 
-dropResourceGroup
-    : 'DROP' 'RESOURCE' 'GROUP' name 'FORCE'?
-    ;
-
 //----------------------------------------------------------------------------------------------------------------------
-
-utilityStatement
-    : describeStatement
-    | explainStatement
-    | 'HELP' name
-    | 'USE' name
-    | 'RESTART'
-    ;
-
-describeStatement
-    : ('EXPLAIN' | 'DESCRIBE' | 'DESC') qname (
-        string
-        | qname
-    )?
-    ;
-
-explainStatement
-    : ('EXPLAIN' | 'DESCRIBE' | 'DESC') explainOptions? (
-        'FOR' 'DATABASE' name
-    )? explainableStatement
-    ;
 
 explainOptions
     : 'FORMAT' '=' name ( 'INTO' '@' name )?
@@ -2398,8 +1720,8 @@ explainOptions
 
 explainableStatement
     : select
-    | deleteStatement
-    | insertStatement
+    | delete
+    | insert
     | replaceStatement
     | updateStatement
     | 'FOR' 'CONNECTION' integer
@@ -2424,6 +1746,7 @@ boolPri
 
 compOp
     : '='
+    | '<>'
     | '<=>'
     | '>='
     | '>'
@@ -2479,9 +1802,8 @@ simpleExpr
     | 'MATCH' identListArg 'AGAINST' '(' bitExpr fulltextOptions? ')'
     | 'BINARY' simpleExpr
     | 'CAST' '(' expr ('AT' 'LOCAL')? 'AS' castType ('ARRAY')? ')'
-    | 'CAST' '(' expr 'AT' 'TIME' 'ZONE' 'INTERVAL'? string 'AS'
-        'DATETIME' typeDatetimePrecision ')'
-    | 'CASE' expr? (whenExpression thenExpression)+ elseExpression? 'END'
+    | 'CAST' '(' expr 'AT' 'TIME' 'ZONE' 'INTERVAL'? string 'AS' 'DATETIME' typeDatetimePrecision ')'
+    | 'CASE' expr? ('WHEN' expr 'THEN' expr)+ ('ELSE' expr)? 'END'
     | 'CONVERT' '(' expr ',' castType ')'
     | 'CONVERT' '(' expr 'USING' name ')'
     | 'DEFAULT' '(' qname ')'
@@ -2516,11 +1838,6 @@ windowFunctionCall
     | 'NTH_VALUE' '(' expr ',' simpleExpr ')' ( 'FROM' ('FIRST' | 'LAST') )? nullTreatment? windowingClause
     ;
 
-samplingMethod
-    : 'SYSTEM'
-    | 'BERNOULLI'
-    ;
-
 samplingPercentage
     : number
 //    | '@' textOrIdentifier
@@ -2529,7 +1846,7 @@ samplingPercentage
     ;
 
 tablesampleClause
-    : 'TABLESAMPLE' samplingMethod '(' samplingPercentage ')'
+    : 'TABLESAMPLE' ('SYSTEM' | 'BERNOULLI') '(' samplingPercentage ')'
     ;
 
 windowingClause
@@ -2677,22 +1994,11 @@ lvalueVariable
     :  'DEFAULT'? qname
     ;
 
-whenExpression
-    : 'WHEN' expr
-    ;
-
-thenExpression
-    : 'THEN' expr
-    ;
-
-elseExpression
-    : 'ELSE' expr
-    ;
-
 castType
     : 'BINARY' fieldLength?
     | 'CHAR' fieldLength? charsetWithOptBinary?
-    | nchar fieldLength?
+    | ('NCHAR'
+    | 'NATIONAL' 'CHAR') fieldLength?
     | 'SIGNED' ( 'INT' | 'INTEGER' )?
     | 'UNSIGNED' ( 'INT' | 'INTEGER' )?
     | 'DATE'
@@ -2701,8 +2007,9 @@ castType
     | 'DATETIME' typeDatetimePrecision?
     | ('DEC' | 'DECIMAL' ) floatOptions?
     | 'JSON'
-    | realType
-    | 'FLOAT' (floatOptions)?
+    | 'REAL'
+    | 'DOUBLE' 'PRECISION'?
+    | 'FLOAT' floatOptions?
     | 'POINT'
     | 'LINESTRING'
     | 'POLYGON'
@@ -2768,58 +2075,30 @@ channel
 // Implements both, sp_proc_stmt and ev_sql_stmt_inner from the server grammar.
 compoundStatement
     : statement
-    | returnStatement
-    | ifStatement
-    | caseStatement
-    | labeledBlock
+    | 'RETURN' expr
+    | 'IF' ifBody 'END' 'IF'
+    | 'CASE' expr? ('WHEN' expr thenStatement)+ ('ELSE' (compoundStatement ';')+)? 'END' 'CASE'
+    | name ':' beginEndBlock name?
     | beginEndBlock
-    | labeledControl
+    | name ':' unlabeledControl name?
     | unlabeledControl
-    | leaveStatement
-    | iterateStatement
-    | cursorOpen
-    | cursorFetch
-    | cursorClose
-    ;
-
-returnStatement
-    : 'RETURN' expr
-    ;
-
-ifStatement
-    : 'IF' ifBody 'END' 'IF'
+    | 'LEAVE' name
+    | 'ITERATE' name
+    | 'OPEN' name
+    | 'FETCH' ('NEXT'? 'FROM')? name 'INTO' name (',' name)*
+    | 'CLOSE' name
     ;
 
 ifBody
-    : expr thenStatement ('ELSEIF' ifBody | 'ELSE' compoundStatementList)?
+    : expr thenStatement ('ELSEIF' ifBody | 'ELSE' (compoundStatement ';')+)?
     ;
 
 thenStatement
-    : 'THEN' compoundStatementList
-    ;
-
-compoundStatementList
-    : (compoundStatement ';')+
-    ;
-
-caseStatement
-    : 'CASE' expr? (whenExpression thenStatement)+ elseStatement? 'END' 'CASE'
-    ;
-
-elseStatement
-    : 'ELSE' compoundStatementList
-    ;
-
-labeledBlock
-    : name ':' beginEndBlock (name)?
+    : 'THEN' (compoundStatement ';')+
     ;
 
 beginEndBlock
-    : 'BEGIN' spDeclarations? compoundStatementList? 'END'
-    ;
-
-labeledControl
-    : name ':' unlabeledControl (name)?
+    : 'BEGIN' (spDeclaration ';')* (compoundStatement ';')* 'END'
     ;
 
 unlabeledControl
@@ -2829,34 +2108,22 @@ unlabeledControl
     ;
 
 loopBlock
-    : 'LOOP' compoundStatementList 'END' 'LOOP'
+    : 'LOOP' (compoundStatement ';')+ 'END' 'LOOP'
     ;
 
 whileDoBlock
-    : 'WHILE' expr 'DO' compoundStatementList 'END' 'WHILE'
+    : 'WHILE' expr 'DO' (compoundStatement ';')+ 'END' 'WHILE'
     ;
 
 repeatUntilBlock
-    : 'REPEAT' compoundStatementList 'UNTIL' expr 'END' 'REPEAT'
-    ;
-
-spDeclarations
-    : (spDeclaration ';')+
+    : 'REPEAT' (compoundStatement ';')+ 'UNTIL' expr 'END' 'REPEAT'
     ;
 
 spDeclaration
-    : variableDeclaration
-    | conditionDeclaration
-    | handlerDeclaration
-    | cursorDeclaration
-    ;
-
-variableDeclaration
     : 'DECLARE' name (',' name)* dataType collate? ('DEFAULT' expr)?
-    ;
-
-conditionDeclaration
-    : 'DECLARE' name 'CONDITION' 'FOR' spCondition
+    | 'DECLARE' name 'CONDITION' 'FOR' spCondition
+    | 'DECLARE' ('CONTINUE' | 'EXIT' | 'UNDO') 'HANDLER' 'FOR' handlerCondition ( ',' handlerCondition )* compoundStatement
+    | 'DECLARE' name 'CURSOR' 'FOR' select
     ;
 
 spCondition
@@ -2868,12 +2135,6 @@ sqlstate
     : 'SQLSTATE' 'VALUE'? textLiteral
     ;
 
-handlerDeclaration
-    : 'DECLARE' ('CONTINUE' | 'EXIT' | 'UNDO') 'HANDLER' 'FOR' handlerCondition (
-        ',' handlerCondition
-    )* compoundStatement
-    ;
-
 handlerCondition
     : spCondition
     | name
@@ -2882,33 +2143,16 @@ handlerCondition
     | 'SQLEXCEPTION'
     ;
 
-cursorDeclaration
-    : 'DECLARE' name 'CURSOR' 'FOR' select
-    ;
-
-iterateStatement
-    : 'ITERATE' name
-    ;
-
-leaveStatement
-    : 'LEAVE' name
-    ;
-
-getDiagnosticsStatement
-    : 'GET' ('CURRENT' | 'STACKED')? 'DIAGNOSTICS' (
-        statementInformationItem (',' statementInformationItem)*
-        | 'CONDITION' qname conditionInformationItem (
-            ',' conditionInformationItem
-        )*
-    )
-    ;
-
 statementInformationItem
     : name '=' ('NUMBER' | 'ROW_COUNT')
     ;
 
 conditionInformationItem
     : name '=' ( signalInformationItemName | 'RETURNED_SQLSTATE' )
+    ;
+
+signalInformationItem
+    : signalInformationItemName '=' qname
     ;
 
 signalInformationItemName
@@ -2926,29 +2170,7 @@ signalInformationItemName
     | 'MYSQL_ERRNO'
     ;
 
-signalStatement
-    : ( 'SIGNAL' | 'RESIGNAL' ) (name | sqlstate) ( 'SET' signalInformationItem (',' signalInformationItem)* )?
-    ;
 
-signalInformationItem
-    : signalInformationItemName '=' qname
-    ;
-
-cursorOpen
-    : 'OPEN' name
-    ;
-
-cursorClose
-    : 'CLOSE' name
-    ;
-
-cursorFetch
-    : 'FETCH' ('NEXT'? 'FROM')? name 'INTO' name (',' name)*
-    ;
-
-//----------------- Supplemental rules ---------------------------------------------------------------------------------
-
-// Schedules in CREATE/ALTER EVENT.
 schedule
     : 'AT' expr
     | 'EVERY' expr interval ('STARTS' expr)? ('ENDS' expr)?
@@ -2973,13 +2195,13 @@ constraintEnforcement
 
 tableConstraintDef
     : ('KEY' | 'INDEX') indexNameAndType? keyListWithExpression indexOption*
-    | 'FULLTEXT' keyOrIndex? (name)? keyListWithExpression fulltextIndexOption*
-    | 'SPATIAL' keyOrIndex? (name)? keyListWithExpression (commonIndexOption)*
-    | constraintName? (
-        ('PRIMARY' 'KEY' | 'UNIQUE' keyOrIndex?) indexNameAndType? keyListWithExpression indexOption*
-        | 'FOREIGN' 'KEY' (name)? keyList references
+    | 'FULLTEXT' keyOrIndex? name? keyListWithExpression fulltextIndexOption*
+    | 'SPATIAL' keyOrIndex? name? keyListWithExpression commonIndexOption*
+    | constraintName?
+        ( ('PRIMARY' 'KEY' | 'UNIQUE' keyOrIndex?) indexNameAndType? keyListWithExpression indexOption*
+        | 'FOREIGN' 'KEY' name? keyList references
         | checkConstraint constraintEnforcement?
-    )
+        )
     ;
 
 constraintName
@@ -2987,19 +2209,16 @@ constraintName
     ;
 
 fieldDefinition
-    : dataType (
-        columnAttribute*
-        | collate? ('GENERATED' 'ALWAYS')? 'AS' '(' expr ')' (
-            'VIRTUAL'
-            | 'STORED'
-        )? columnAttribute*
-    )
+    : dataType
+        ( columnAttribute*
+        | collate? ('GENERATED' 'ALWAYS')? 'AS' '(' expr ')' ( 'VIRTUAL' | 'STORED' )? columnAttribute*
+        )
     ;
 
 columnAttribute
     : 'NOT'? null
     | 'NOT' 'SECONDARY'
-    | 'DEFAULT' ( nowOrSignedLiteral | '(' expr ')' )
+    | 'DEFAULT' ( 'NOW' ( '(' INT_NUMBER? ')' )? | signedLiteral | '(' expr ')' )
     | 'ON' 'UPDATE' 'NOW' ('(' integer? ')')?
     | 'AUTO_INCREMENT'
     | 'SERIAL' 'DEFAULT' 'VALUE'
@@ -3007,35 +2226,14 @@ columnAttribute
     | 'UNIQUE' 'KEY'?
     | 'COMMENT' textLiteral
     | collate
-    | 'COLUMN_FORMAT' columnFormat
-    | 'STORAGE' storageMedia
+    | 'COLUMN_FORMAT' ('FIXED' | 'DYNAMIC' | 'DEFAULT')
+    | 'STORAGE' ('DISK' | 'MEMORY' | 'DEFAULT')
     | 'SRID' integer
     | constraintName? checkConstraint
     | constraintEnforcement
     | 'ENGINE_ATTRIBUTE' '='? string
     | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
     | visibility
-    ;
-
-columnFormat
-    : 'FIXED'
-    | 'DYNAMIC'
-    | 'DEFAULT'
-    ;
-
-storageMedia
-    : 'DISK'
-    | 'MEMORY'
-    | 'DEFAULT'
-    ;
-
-now
-    : 'NOW' ( '(' INT_NUMBER? ')' )?
-    ;
-
-nowOrSignedLiteral
-    : now
-    | signedLiteral
     ;
 
 references
@@ -3085,7 +2283,6 @@ indexOption
     | indexTypeClause
     ;
 
-// These options are common for all index types.
 commonIndexOption
     : 'KEY_BLOCK_SIZE' '='? number
     | 'COMMENT' textLiteral
@@ -3108,26 +2305,16 @@ fulltextIndexOption
     | 'WITH' 'PARSER' name
     ;
 
-//dataTypeDefinition
-//    : // For external use only. Don't reference this in the normal grammar.
-//    dataType EOF
-//    ;
-
+// TODO merge dataTyle and castType rules?
 dataType
-    : // type in sql_yacc.yy
-    (
-        'INT'
-        | 'TINYINT'
-        | 'SMALLINT'
-        | 'MEDIUMINT'
-        | 'BIGINT'
-    ) fieldLength? fieldOptions?
+    : ( 'INT' | 'TINYINT' | 'SMALLINT' | 'MEDIUMINT' | 'BIGINT' ) fieldLength? fieldOptions?
     | ('REAL' | 'DOUBLE' 'PRECISION'?) (floatOptions)? fieldOptions?
     | ('FLOAT' | 'DECIMAL' | 'NUMERIC' | 'FIXED') floatOptions? fieldOptions?
     | 'BIT' fieldLength?
     | ('BOOL' | 'BOOLEAN')
     | 'CHAR' fieldLength? charsetWithOptBinary?
-    | nchar fieldLength? 'BINARY'?
+    | ('NCHAR'
+    | 'NATIONAL' 'CHAR') fieldLength? 'BINARY'?
     | 'BINARY' fieldLength?
     | ('CHAR' 'VARYING' | 'VARCHAR') fieldLength charsetWithOptBinary?
     | (
@@ -3145,7 +2332,8 @@ dataType
     | 'DATETIME' typeDatetimePrecision?
     | 'TINYBLOB'
     | 'BLOB' fieldLength?
-    | ('MEDIUMBLOB' | 'LONGBLOB')
+    | 'MEDIUMBLOB'
+    | 'LONGBLOB'
     | 'LONG' 'VARBINARY'
     | 'LONG' ('CHAR' 'VARYING' | 'VARCHAR')? charsetWithOptBinary?
     | 'TINYTEXT' charsetWithOptBinary?
@@ -3156,30 +2344,19 @@ dataType
     | 'SET' '(' string (',' string)* ')' charsetWithOptBinary?
     | 'SERIAL'
     | 'JSON'
-    | (
-        'GEOMETRY'
-        | 'GEOMETRYCOLLECTION'
-        | 'POINT'
-        | 'MULTIPOINT'
-        | 'LINESTRING'
-        | 'MULTILINESTRING'
-        | 'POLYGON'
-        | 'MULTIPOLYGON'
-    )
-    ;
-
-nchar
-    : 'NCHAR'
-    | 'NATIONAL' 'CHAR'
-    ;
-
-realType
-    : 'REAL'
-    | 'DOUBLE' 'PRECISION'?
+    | 'GEOMETRY'
+    | 'GEOMETRYCOLLECTION'
+    | 'POINT'
+    | 'MULTIPOINT'
+    | 'LINESTRING'
+    | 'MULTILINESTRING'
+    | 'POLYGON'
+    | 'MULTIPOLYGON'
     ;
 
 fieldLength
-    : '(' (integer | DECIMAL_NUMBER) ')'
+//    : '(' (integer | DECIMAL_NUMBER) ')'
+    : '(' integer  ')'
     ;
 
 fieldOptions
@@ -3191,7 +2368,7 @@ charsetWithOptBinary
     | ('UNICODE' 'BINARY'? | 'BINARY' 'UNICODE')
     | 'BYTE'
     | charset 'BINARY'?
-    | 'BINARY' (charset)?
+    | 'BINARY' charset?
     ;
 
 typeDatetimePrecision
@@ -3225,8 +2402,8 @@ createTableOption
     | 'DELAY_KEY_WRITE' '='? number
     | 'ROW_FORMAT' '='? ( 'DEFAULT' | 'DYNAMIC' | 'FIXED' | 'COMPRESSED' | 'REDUNDANT' | 'COMPACT' )
     | 'UNION' '='? '(' qnames ')'
-    | defaultCharset
-    | defaultCollation
+    | 'DEFAULT'? charset '='? name
+    | 'DEFAULT'? 'COLLATE' '='? name
     | 'INSERT_METHOD' '='? ( 'NO' | 'FIRST' | 'LAST' )
     | 'DATA' 'DIRECTORY' '='? string
     | 'INDEX' 'DIRECTORY' '='? string
@@ -3243,18 +2420,6 @@ createTableOption
 ternaryOption
     : number
     | 'DEFAULT'
-    ;
-
-defaultCollation
-    : 'DEFAULT'? 'COLLATE' '='? name
-    ;
-
-defaultEncryption
-    : 'DEFAULT'? 'ENCRYPTION' '='? string
-    ;
-
-defaultCharset
-    : 'DEFAULT'? charset '='? name
     ;
 
 // Partition rules for CREATE/ALTER TABLE.
@@ -3403,7 +2568,7 @@ createUserList
 createUser
     : user
         ( identification createUserWithMfa?
-        | identifiedWithPlugin initialAuth?
+        | identifiedWithPlugin ('INITIAL' 'AUTHENTICATION' ( identifiedByRandomPassword | identifiedWithPluginAsAuth | identifiedByPassword ))?
         | createUserWithMfa
         )?
     ;
@@ -3445,14 +2610,6 @@ identifiedWithPluginByRandomPassword
     : 'IDENTIFIED' 'WITH' name 'BY' 'RANDOM' 'PASSWORD'
     ;
 
-initialAuth
-    : 'INITIAL' 'AUTHENTICATION' (
-        identifiedByRandomPassword
-        | identifiedWithPluginAsAuth
-        | identifiedByPassword
-    )
-    ;
-
 retainCurrentPassword
     : 'RETAIN' 'CURRENT' 'PASSWORD'
     ;
@@ -3484,12 +2641,8 @@ user
     | 'CURRENT_USER' ('(' ')')?
     ;
 
-likeClause
+like
     : 'LIKE' string
-    ;
-
-likeOrWhere
-    : likeClause
     | where
     ;
 
@@ -3520,16 +2673,8 @@ tableWild
     : name '.' (name '.')? '*'
     ;
 
-tableRefWithWildcard
-    : qname
-    ;
-
 qnames
     : qname (',' qname)*
-    ;
-
-tableAliasRefList
-    : tableRefWithWildcard (',' tableRefWithWildcard)*
     ;
 
 qname
@@ -3552,7 +2697,7 @@ literal
     | number
     | temporalLiteral
     | null
-    | boolLiteral
+    | boolean
 //    | UNDERSCORE_CHARSET? (HEX_NUMBER | BIN_NUMBER)
     ;
 
@@ -3585,7 +2730,7 @@ number
 //    | FLOAT_NUMBER
     ;
 
-boolLiteral
+boolean
     : 'TRUE'
     | 'FALSE'
     ;
