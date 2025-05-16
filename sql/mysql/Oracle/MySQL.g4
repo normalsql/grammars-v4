@@ -46,7 +46,7 @@ options {
 
 statements
 //    : (statement | beginWork) ';' ;
-    : statement? ( ';' statement? )* EOF ;
+    : statement? ( (';'|'|') statement? )* EOF ;
 
 // TODO: inlining all the statements for now. will re-refactor as needed.
 
@@ -142,7 +142,7 @@ statement
     | 'LOAD' ('DATA' | 'TABLE' qname) 'FROM' 'MASTER'
     | ('START' groupReplicationStartOptions? | 'STOP') 'GROUP_REPLICATION'
     | 'PREPARE' name 'FROM' (string | name)
-    | 'EXECUTE' name ('USING' name ( ',' name )*)?
+    | 'EXECUTE' name ('USING' qname ( ',' qname )*)?
     | ('DEALLOCATE' | 'DROP') 'PREPARE' name
 
     | 'CLONE' 'LOCAL' 'DATA' 'DIRECTORY' equal? string
@@ -1877,11 +1877,11 @@ columns
 
 qname
 //    :
-//    | LOCAL
       // weird reverse construction for [[database.]table.]column
     :  '.'? name ( '.' name ( '.' name )? )?
       // TODO would this way be better, worse?
 //      (( '.'? name '.' )? name '.' )? name
+    | LOCAL
     | GLOBAL
     ;
 
