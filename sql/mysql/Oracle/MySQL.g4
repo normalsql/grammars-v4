@@ -1857,7 +1857,7 @@ userName
     ;
 
 like
-    : 'LIKE' string
+    : 'LIKE' name
     | where
     ;
 
