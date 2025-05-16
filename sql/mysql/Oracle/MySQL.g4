@@ -543,18 +543,17 @@ select
     ;
 
 selectCore
-    : 'SELECT' unique? modifier* item (',' item)* into?
+    : 'SELECT' modifier* item (',' item)* into?
        from? where? groupBy? having? window? qualify?
     | 'VALUES' 'ROW' '(' terms? ')' (',' 'ROW' '(' terms? ')')*
     | 'TABLE' qname
     | '(' select ')'
     ;
 
-unique
-    : 'ALL' | 'DISTINCT' | 'DISTINCTROW' ;
 
 modifier
-    : 'HIGH_PRIORITY'
+    : 'ALL' | 'DISTINCT' | 'DISTINCTROW'
+    | 'HIGH_PRIORITY'
     | 'STRAIGHT_JOIN'
     | 'SQL_SMALL_RESULT'
     | 'SQL_BIG_RESULT'
