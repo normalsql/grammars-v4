@@ -295,7 +295,7 @@ alterListItem
     | 'DROP' ( 'COLUMN'? name ('RESTRICT' | 'CASCADE')? | 'FOREIGN' 'KEY' name | 'PRIMARY' 'KEY' | keyOrIndex qname | 'CHECK' name | 'CONSTRAINT' name )
     | 'DISABLE' 'KEYS'
     | 'ENABLE' 'KEYS'
-    | 'ALTER' 'COLUMN'? name ( 'SET' 'DEFAULT' ( '(' term ')' | signedLiteral ) | 'DROP' 'DEFAULT' | 'SET' visibility )
+    | 'ALTER' 'COLUMN'? name ( 'SET' 'DEFAULT' ( '(' term ')' | literal ) | 'DROP' 'DEFAULT' | 'SET' visibility )
     | 'ALTER' 'INDEX' qname visibility
     | 'ALTER' 'CHECK' name constraintEnforcement
     | 'ALTER' 'CONSTRAINT' name constraintEnforcement
@@ -1581,7 +1581,7 @@ fieldDefinition
 columnAttribute
     : 'NOT'? null
     | 'NOT' 'SECONDARY'
-    | 'DEFAULT' ( now | signedLiteral | '(' term ')' )
+    | 'DEFAULT' ( now | literal | '(' term ')' )
     | 'ON' 'UPDATE' now
     | 'AUTO_INCREMENT'
     | 'SERIAL' 'DEFAULT' 'VALUE'
@@ -1876,7 +1876,6 @@ columns
     ;
 
 qname
-//    :
       // weird reverse construction for [[database.]table.]column
     :  '.'? name ( '.' name ( '.' name )? )?
       // TODO would this way be better, worse?
@@ -1893,9 +1892,9 @@ signedLiteral
 literal
 //    : string
     : name
-    | INTEGER
+    | ( '+' | '-' )? INTEGER
     | SIZE
-    | FLOAT
+    | ( '+' | '-' )? FLOAT
     | datetime
     | null
 //    | 'TRUE'
