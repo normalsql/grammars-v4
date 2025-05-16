@@ -507,7 +507,7 @@ insert
     ;
 
 insertFromConstructor
-    : ('(' (wild (',' wild)*)? ')')? ('VALUES' | 'VALUE') terms ( ',' terms )*
+    : ('(' (wild (',' wild)*)? ')')? ('VALUES' | 'VALUE') terms0 ( ',' terms0 )*
     ;
 
 insertQueryExpression
@@ -518,6 +518,10 @@ insertQueryExpression
 
 terms
     : '(' term  (',' term )* ')'
+    ;
+
+terms0
+    : '(' ( term  (',' term )* )? ')'
     ;
 
 valuesReference
@@ -545,7 +549,7 @@ select
 selectCore
     : 'SELECT' modifier* item (',' item)* into?
        from? where? groupBy? having? window? qualify?
-    | 'VALUES' 'ROW' '(' terms? ')' (',' 'ROW' '(' terms? ')')*
+    | 'VALUES' 'ROW' terms0 (',' 'ROW' terms0 )*
     | 'TABLE' qname
     | '(' select ')'
     ;
