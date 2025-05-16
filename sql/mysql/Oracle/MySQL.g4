@@ -53,7 +53,7 @@ statements
 statement
     // DDL
     : 'ALTER' onlineOption? 'TABLE' qname alterTableActions?
-    | 'ALTER' 'DATABASE' name (createDatabaseOption | 'READ' 'ONLY' '='? ternaryOption)+
+    | 'ALTER' ( 'DATABASE' | 'SCHEMA' ) name (createDatabaseOption | 'READ' 'ONLY' '='? ternaryOption)+
     | 'ALTER' 'PROCEDURE' qname routineCreateOption*
     | 'ALTER' 'FUNCTION' qname routineCreateOption*
     | 'ALTER' viewAlgorithm? definer? security? 'VIEW' qname columns? 'AS' select viewCheckOption?
@@ -75,27 +75,26 @@ statement
     | 'ALTER' ('ENABLE' | 'DISABLE') name name
     | 'ALTER' 'RELOAD' 'KEYRING'
     | 'CREATE' 'AGGREGATE'? 'FUNCTION' notExists? name 'RETURNS' ( 'STRING' | 'INT' | 'REAL' | 'DECIMAL' ) 'SONAME' string
-    | 'CREATE' 'DATABASE' notExists? name createDatabaseOption*
+    | 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? name createDatabaseOption*
     | 'CREATE' definer? 'FUNCTION' notExists? qname '(' ( functionParameter (',' functionParameter)* )? ')' 'RETURNS' dataType collate? routineCreateOption* storedRoutineBody
     | 'CREATE' definer? 'PROCEDURE' notExists? qname '(' ( procedureParameter (',' procedureParameter)* )? ')' routineCreateOption* storedRoutineBody
-    | 'CREATE' definer? 'TRIGGER' notExists? qname ( 'BEFORE' | 'AFTER' ) ('INSERT' | 'UPDATE' | 'DELETE') 'ON' qname 'FOR' 'EACH' 'ROW' ('FOLLOWS' | 'PRECEDES') name? compoundStatement
+    | 'CREATE' definer? 'TRIGGER' notExists? qname ( 'BEFORE' | 'AFTER' ) ('INSERT' | 'UPDATE' | 'DELETE') 'ON' qname 'FOR' 'EACH' 'ROW' (('FOLLOWS' | 'PRECEDES') name)? compoundStatement
     | 'CREATE' createIndex
-    | 'CREATE' 'LOGFILE' 'GROUP' name 'ADD' 'UNDOFILE' string logfileGroupOptions?
+    | 'CREATE' 'LOGFILE' 'GROUP' name 'ADD' 'UNDOFILE' string (logfileGroupOption (','? logfileGroupOption)*)?
     | 'CREATE' 'SERVER' name 'FOREIGN' 'DATA' 'WRAPPER' name 'OPTIONS' '(' serverOption (',' serverOption)* ')'
     | 'CREATE' 'TABLESPACE' name ('ADD' 'DATAFILE' string)? ( 'USE' 'LOGFILE' 'GROUP' name )? tablespaceOptions?
-//    | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ( ('(' tableElementList ')')? createTableOptionsEtc? | 'LIKE' qname | '(' 'LIKE' qname ')' )
-    | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ('(' tableElementList ')')? createTableOptionsEtc?
+    | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ('(' tableElementList ')')? ( tableOption (','? tableOption)* )? partitionBy? (('REPLACE' | 'IGNORE')? 'AS'? select)?
     | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ( 'LIKE' qname | '(' 'LIKE' qname ')' )
     | 'CREATE' ('OR' 'REPLACE' viewAlgorithm? | viewAlgorithm)? definer? security? 'VIEW' qname columns? 'AS' select viewCheckOption?
     | 'CREATE' definer? 'EVENT' notExists? qname 'ON' 'SCHEDULE' schedule ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ('ENABLE' | 'DISABLE' ('ON' replica)?)? ( 'COMMENT' string )? 'DO' compoundStatement
     | 'CREATE' 'ROLE' notExists? roleList
     | 'CREATE' orReplace? 'SPATIAL' 'REFERENCE' 'SYSTEM' notExists? INTEGER srsAttribute*
     | 'CREATE' 'UNDO' 'TABLESPACE' name 'ADD' 'DATAFILE' string undoTableSpaceOptions?
-    | 'DROP' 'DATABASE' exists? name
+    | 'DROP' ( 'DATABASE' | 'SCHEMA' ) exists? name
     | 'DROP' 'EVENT' exists? qname
     | 'DROP' 'FUNCTION' exists? qname
     | 'DROP' 'PROCEDURE' exists? qname
-    | 'DROP' onlineOption? 'INDEX' qname 'ON' qname indexLockAndAlgorithm?
+    | 'DROP' onlineOption? 'INDEX' qname 'ON' qname ('ALGORITHM' '='? name | 'LOCK' '='? name)*
     | 'DROP' 'LOGFILE' 'GROUP' name ( dropLogfileGroupOption (','? dropLogfileGroupOption)* )?
     | 'DROP' 'SERVER' exists? name
     | 'DROP' 'TEMPORARY'? ('TABLE' | 'TABLES') exists? qname (',' qname)* ( 'RESTRICT' | 'CASCADE' )?
@@ -119,7 +118,7 @@ statement
     | replace
     | select
     | updateStatement
-    | 'START' 'TRANSACTION' ('WITH' 'CONSISTENT' 'SNAPSHOT' | transactionAccessMode )*
+    | 'START' 'TRANSACTION' ('WITH' 'CONSISTENT' 'SNAPSHOT' | 'READ' ('WRITE' | 'ONLY') )*
     | 'COMMIT' 'WORK'? ('AND' 'NO'? 'CHAIN')? ( 'NO'? 'RELEASE' )?
     | 'SAVEPOINT' name
     | 'ROLLBACK' 'WORK'? ( 'TO' 'SAVEPOINT'? name | ('AND' 'NO'? 'CHAIN')? ('NO'? 'RELEASE')? )
@@ -202,7 +201,7 @@ statement
     | 'SHOW' 'COLLATION' like?
     | 'SHOW' 'PRIVILEGES'
     | 'SHOW' 'GRANTS' ('FOR' user ('USING' user (',' user)*)?)?
-    | 'SHOW' 'CREATE' 'DATABASE' notExists? name
+    | 'SHOW' 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? name
     | 'SHOW' 'CREATE' 'TABLE' qname
     | 'SHOW' 'CREATE' 'VIEW' qname
     | 'SHOW' 'MASTER' 'STATUS'
@@ -236,7 +235,7 @@ statement
     | ( 'SIGNAL' signalCondition | 'RESIGNAL' signalCondition? ) ( 'SET' signalItem (',' signalItem)* )?
     ;
 
-setVariable : ( scope? ID | GLOBAL ) equal term ;
+setVariable : ( scope? qname | LOCAL | GLOBAL ) equal term ;
 
 signalCondition
     : name
@@ -244,7 +243,7 @@ signalCondition
     ;
 
 alterLogfileGroupOptions
-    : (initialSize | tsOptionEngine | tsOptionWait) (','? (initialSize | tsOptionEngine | tsOptionWait))* ;
+    : ('INITIAL_SIZE' '='? byteSize | 'STORAGE'? 'ENGINE' '='? name | ('WAIT' | 'NO_WAIT')) (','? ('INITIAL_SIZE' '='? byteSize | 'STORAGE'? 'ENGINE' '='? name | ('WAIT' | 'NO_WAIT')))* ;
 
 alterTableActions
     : alterCommandList (partitionBy | removePartitioning)?
@@ -255,7 +254,7 @@ alterTableActions
 
 alterCommandList
     : alterCommandsModifierList
-    | (alterCommandsModifierList ',')? (alterListItem | createTableOption+) ( ',' ( alterListItem | alterCommandsModifier | createTableOption+ ) )*
+    | (alterCommandsModifierList ',')? (alterListItem | tableOption+) ( ',' ( alterListItem | alterCommandsModifier | tableOption+ ) )*
     ;
 
 alterCommandsModifierList
@@ -265,36 +264,27 @@ alterCommandsModifierList
 standaloneAlterCommands
     : 'DISCARD' 'TABLESPACE'
     | 'IMPORT' 'TABLESPACE'
-    | alterPartition
-    | 'SECONDARY_LOAD'
-    | 'SECONDARY_UNLOAD'
-    ;
-
-alterPartition
-    : 'ADD' 'PARTITION' noLogging?
-        ( '(' partition (',' partition)* ')'
-        | 'PARTITIONS' INTEGER
-        )
+    | 'ADD' 'PARTITION' noLogging? ( '(' partitionDef (',' partitionDef)* ')' | 'PARTITIONS' INTEGER )
     | 'DROP' 'PARTITION' name (',' name)*
     | 'REBUILD' 'PARTITION' noLogging? allOrPartitionNameList
-
-    // yes, twice "no write to bin log".
     | 'OPTIMIZE' 'PARTITION' noLogging? allOrPartitionNameList noLogging?
     | 'ANALYZE' 'PARTITION' noLogging? allOrPartitionNameList
     | 'CHECK' 'PARTITION' allOrPartitionNameList checkOption*
     | 'REPAIR' 'PARTITION' noLogging? allOrPartitionNameList repairType*
     | 'COALESCE' 'PARTITION' noLogging? INTEGER
     | 'TRUNCATE' 'PARTITION' allOrPartitionNameList
-    | 'REORGANIZE' 'PARTITION' noLogging? ( name (',' name)* 'INTO' '(' partition (',' partition)* ')' )?
-    | 'EXCHANGE' 'PARTITION' name 'WITH' 'TABLE' qname withValidation?
+    | 'REORGANIZE' 'PARTITION' noLogging? ( name (',' name)* 'INTO' '(' partitionDef (',' partitionDef)* ')' )?
+    | 'EXCHANGE' 'PARTITION' name 'WITH' 'TABLE' qname ('WITH' | 'WITHOUT') 'VALIDATION'?
     | 'DISCARD' 'PARTITION' allOrPartitionNameList 'TABLESPACE'
     | 'IMPORT' 'PARTITION' allOrPartitionNameList 'TABLESPACE'
+    | 'SECONDARY_LOAD'
+    | 'SECONDARY_UNLOAD'
     ;
 
 alterCommandsModifier
-    : alterAlgorithmOption
-    | alterLockOption
-    | withValidation
+    : 'ALGORITHM' '='? name
+    | 'LOCK' '='? name
+    | ('WITH' | 'WITHOUT') 'VALIDATION'
     ;
 
 alterListItem
@@ -322,23 +312,6 @@ place
     | 'FIRST'
     ;
 
-alterAlgorithmOption
-    : 'ALGORITHM' '='? name
-    ;
-
-alterLockOption
-    : 'LOCK' '='? name
-    ;
-
-indexLockAndAlgorithm
-    : alterAlgorithmOption alterLockOption?
-    | alterLockOption alterAlgorithmOption?
-    ;
-
-withValidation
-    : ('WITH' | 'WITHOUT') 'VALIDATION'
-    ;
-
 removePartitioning
     : 'REMOVE' 'PARTITIONING'
     ;
@@ -349,7 +322,7 @@ allOrPartitionNameList
     ;
 
 undoTableSpaceOptions
-    : tsOptionEngine (','? tsOptionEngine)*
+    : 'STORAGE'? 'ENGINE' '='? name (','? 'STORAGE'? 'ENGINE' '='? name)*
     ;
 
 alterTablespaceOptions
@@ -357,12 +330,12 @@ alterTablespaceOptions
     ;
 
 alterTablespaceOption
-    : initialSize
-    | tsOptionAutoextendSize
-    | tsOptionMaxSize
-    | tsOptionEngine
-    | tsOptionWait
-    | tsOptionEncryption
+    : 'INITIAL_SIZE' '='? byteSize
+    | 'AUTOEXTEND_SIZE' '='? byteSize
+    | 'MAX_SIZE' '='? byteSize
+    | 'STORAGE'? 'ENGINE' '='? name
+    | ('WAIT' | 'NO_WAIT')
+    | 'ENCRYPTION' '='? string
     | 'ENGINE' '='? string
     ;
 
@@ -385,10 +358,6 @@ tableElement
     | tableConstraintDef
     ;
 
-duplicateAsQe
-    : ('REPLACE' | 'IGNORE')? 'AS'? select
-    ;
-
 storedRoutineBody
     : compoundStatement
     | 'AS' (STRING | DOLLAR_QUOTED_STRING_TEXT)
@@ -405,32 +374,33 @@ routineCreateOption
     | 'NOT'? 'DETERMINISTIC'
     ;
 
-//createIndex
-//    : onlineOption?
-//        ( 'UNIQUE'? 'INDEX' name indexTypeClause? createIndexTarget indexOption*
-//        | 'FULLTEXT' 'INDEX' name createIndexTarget fulltextIndexOption*
-//        | 'SPATIAL' 'INDEX' name createIndexTarget commonIndexOption*
-//        )
-//        indexLockAndAlgorithm?
-//    ;
-
 createIndex
     : ( 'UNIQUE' | 'FULLTEXT' | 'SPATIAL')? 'INDEX' name ('USING' ('BTREE' | 'HASH'))?
         'ON' qname '(' keyPart (',' keyPart)* ')'
-        indexOption2*
-
-        ( 'ALGORITHM' '='? name | 'LOCK' '='? name )?
+        createIndexOption*
     ;
 
-    indexOption2
-        : 'KEY_BLOCK_SIZE' '='? INTEGER
-        | ('USING' ('BTREE' | 'HASH'))
-        | 'WITH' 'PARSER' name
-        | 'COMMENT' string
-        | visibility
-        | 'ENGINE_ATTRIBUTE' '='? string
-        | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
-        ;
+createIndexOption
+    : 'KEY_BLOCK_SIZE' '='? INTEGER
+    | ('USING' ('BTREE' | 'HASH'))
+    | 'WITH' 'PARSER' name
+    | 'COMMENT' string
+    | visibility
+    | 'ENGINE_ATTRIBUTE' '='? string
+    | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
+    | 'ALGORITHM' '='? name
+    | 'LOCK' '='? name
+    ;
+
+
+indexOption
+    : 'KEY_BLOCK_SIZE' '='? INTEGER
+    | 'COMMENT' string
+    | visibility
+    | 'ENGINE_ATTRIBUTE' '='? string
+    | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
+    | ('USING' | 'TYPE') indexType
+    ;
 
 
 
@@ -440,21 +410,13 @@ indexNameAndType
     | name? 'USING' indexType
     ;
 
-//createIndexTarget
-//    : 'ON' qname '(' keyPart (',' keyPart)* ')'
-//    ;
-
-logfileGroupOptions
-    : logfileGroupOption (','? logfileGroupOption)*
-    ;
-
 logfileGroupOption
-    : initialSize
+    : 'INITIAL_SIZE' '='? byteSize
     | ('UNDO_BUFFER_SIZE' | 'REDO_BUFFER_SIZE') '='? byteSize
-    | tsOptionNodegroup
-    | tsOptionEngine
-    | tsOptionWait
-    | tsOptionComment
+    | 'NODEGROUP' '='? INTEGER
+    | 'STORAGE'? 'ENGINE' '='? name
+    | ('WAIT' | 'NO_WAIT')
+    | 'COMMENT' '='? string
     ;
 
 serverOption
@@ -472,48 +434,16 @@ tablespaceOptions
     ;
 
 tablespaceOption
-    : initialSize
-    | tsOptionAutoextendSize
-    | tsOptionMaxSize
-    | 'EXTENT_SIZE' '='? byteSize
-    | tsOptionNodegroup
-    | tsOptionEngine
-    | tsOptionWait
-    | tsOptionComment
-    | 'FILE_BLOCK_SIZE' '='? byteSize
-    | tsOptionEncryption
-    ;
-
-initialSize
     : 'INITIAL_SIZE' '='? byteSize
-    ;
-
-tsOptionAutoextendSize
-    : 'AUTOEXTEND_SIZE' '='? byteSize
-    ;
-
-tsOptionMaxSize
-    : 'MAX_SIZE' '='? byteSize
-    ;
-
-tsOptionNodegroup
-    : 'NODEGROUP' '='? INTEGER
-    ;
-
-tsOptionEngine
-    : 'STORAGE'? 'ENGINE' '='? name
-    ;
-
-tsOptionWait
-    : 'WAIT' | 'NO_WAIT'
-    ;
-
-tsOptionComment
-    : 'COMMENT' '='? string
-    ;
-
-tsOptionEncryption
-    : 'ENCRYPTION' '='? string
+    | 'AUTOEXTEND_SIZE' '='? byteSize
+    | 'MAX_SIZE' '='? byteSize
+    | 'EXTENT_SIZE' '='? byteSize
+    | 'NODEGROUP' '='? INTEGER
+    | 'STORAGE'? 'ENGINE' '='? name
+    | ('WAIT' | 'NO_WAIT')
+    | 'COMMENT' '='? string
+    | 'FILE_BLOCK_SIZE' '='? byteSize
+    | 'ENCRYPTION' '='? string
     ;
 
 viewAlgorithm
@@ -534,8 +464,8 @@ srsAttribute
     ;
 
 dropLogfileGroupOption
-    : tsOptionWait
-    | tsOptionEngine
+    : ('WAIT' | 'NO_WAIT')
+    | 'STORAGE'? 'ENGINE' '='? name
     ;
 
 renamePair
@@ -557,7 +487,7 @@ handlerReadOrScan
     : ('FIRST' | 'NEXT')
     | name
         ( ('FIRST' | 'NEXT' | 'PREV' | 'LAST')
-        | ( '=' | '<' | '>' | '<=' | '>=' ) '(' terms ')'
+        | ( '=' | '<' | '>' | '<=' | '>=' ) terms
         )
     ;
 
@@ -577,7 +507,7 @@ insert
     ;
 
 insertFromConstructor
-    : ('(' (wild (',' wild)*)? ')')? ('VALUES' | 'VALUE') '(' terms? ')' ( ',' '(' terms? ')' )*
+    : ('(' (wild (',' wild)*)? ')')? ('VALUES' | 'VALUE') terms ( ',' terms )*
     ;
 
 insertQueryExpression
@@ -587,7 +517,7 @@ insertQueryExpression
     ;
 
 terms
-    : term  (',' term )*
+    : '(' term  (',' term )* ')'
     ;
 
 valuesReference
@@ -613,7 +543,7 @@ select
     ;
 
 selectCore
-    : 'SELECT' unique? modifier* item (',' item)* /* into? */
+    : 'SELECT' unique? modifier* item (',' item)* into?
        from? where? groupBy? having? window? qualify?
     | 'VALUES' 'ROW' '(' terms? ')' (',' 'ROW' '(' terms? ')')*
     | 'TABLE' qname
@@ -645,7 +575,7 @@ into
     : 'INTO'
         ( 'OUTFILE' string charset? fieldsClause? linesClause?
         | 'DUMPFILE' string
-//        | name ( ',' name )*
+        | name ( ',' name )*
         | LOCAL ( ',' LOCAL )*
         )
     ;
@@ -714,7 +644,7 @@ cte
 
 groupBy
     : 'GROUP' 'BY' orderExpression (',' orderExpression)* ( 'WITH' 'ROLLUP' )?
-    | 'GROUP' 'BY' ( 'ROLLUP' | 'CUBE' ) '(' term (',' term)* ')'
+    | 'GROUP' 'BY' ( 'ROLLUP' | 'CUBE' ) terms
     ;
 
 orderBy
@@ -782,7 +712,6 @@ jsonResponse
     ;
 
 tableAlias
-//    : ('AS' | '=')? name
     : 'AS'? name
     ;
 
@@ -816,7 +745,9 @@ lockItem
 
 lockOption
     : 'READ' 'LOCAL'?
-    | 'LOW_PRIORITY'? 'WRITE' // low priority deprecated since 5.7
+    |
+//    'LOW_PRIORITY'?
+    'WRITE'
     ;
 
 xid
@@ -848,7 +779,6 @@ sourceDefinition
     | ('MASTER_TLS_VERSION' | 'SOURCE_TLS_VERSION') '=' string
     | ('MASTER_SSL_CERT' | 'SOURCE_SSL_CERT') '=' string
     | ('MASTER_TLS_CIPHERSUITES' | 'SOURCE_TLS_CIPHERSUITES') '=' name
-//    | 'SOURCE_TLS_CIPHERSUITES') '=' (string | 'NULL')
     | ('MASTER_SSL_CIPHER' | 'SOURCE_SSL_CIPHER') '=' string
     | ('MASTER_SSL_KEY' | 'SOURCE_SSL_KEY') '=' string
     | ('MASTER_SSL_VERIFY_SERVER_CERT' | 'SOURCE_SSL_VERIFY_SERVER_CERT') '=' INTEGER
@@ -862,7 +792,6 @@ sourceDefinition
     | ('MASTER_ZSTD_COMPRESSION_LEVEL' | 'SOURCE_ZSTD_COMPRESSION_LEVEL') '=' INTEGER
     | ('MASTER_AUTO_POSITION' | 'SOURCE_AUTO_POSITION') '=' INTEGER
     | 'PRIVILEGE_CHECKS_USER' '=' userName
-//    | 'PRIVILEGE_CHECKS_USER' '=' (userName | 'NULL')
     | 'REQUIRE_ROW_FORMAT' '=' INTEGER
     | 'REQUIRE_TABLE_PRIMARY_KEY_CHECK' '=' ('STREAM' | 'ON' | 'OFF' | 'GENERATE')
     | 'SOURCE_CONNECTION_AUTO_FAILOVER' '=' INTEGER
@@ -936,7 +865,6 @@ ssl
     ;
 
 
-// Note: SET PASSWORD is part of the SET statement.
 alterUser
     : oldAlterUser
     | user
@@ -1009,12 +937,6 @@ accountLockPasswordExpireOptions
     | 'FAILED_LOGIN_ATTEMPTS' INTEGER
     | 'PASSWORD_LOCK_TIME' (INTEGER | 'UNBOUNDED')
     ;
-
-//userAttribute
-//    :
-//    | 'ATTRIBUTE' textStringLiteral
-//    | 'COMMENT' textStringLiteral
-//    ;
 
 dropUserStatement
     : 'DROP' 'USER' exists? user (',' user)*
@@ -1092,15 +1014,7 @@ roleOrPrivilege
 
 grantIdentifier
     : ( '*' | name ) ('.' ( '*' | name ))?
-//    | name ('.' '*')?
-//    | qname
-//    | name '.' qname
     ;
-
-//grantIdentifier
-//    : '*'
-//    | qname ('.' '*')?
-//    ;
 
 requireListElement
     : ('CIPHER' | 'ISSUER' | 'SUBJECT') string
@@ -1119,11 +1033,7 @@ setRoleStatement
     ;
 
 roleList
-    : role (',' role)*
-    ;
-
-role
-    : name name?
+    : userName (',' userName)*
     ;
 
 histogram
@@ -1152,20 +1062,16 @@ installSetValue
 
 
 transactionCharacteristics
-    : transactionAccessMode isolationLevel?
-    | isolationLevel (',' transactionAccessMode)?
-    ;
-
-transactionAccessMode
-    : 'READ' ('WRITE' | 'ONLY')
-    ;
-
-isolationLevel
-    : 'ISOLATION' 'LEVEL'
+    : 'READ' ('WRITE' | 'ONLY') ('ISOLATION' 'LEVEL'
         ( 'REPEATABLE' 'READ'
         | 'READ' ('COMMITTED' | 'UNCOMMITTED')
         | 'SERIALIZABLE'
-        )
+        ))?
+    | 'ISOLATION' 'LEVEL'
+        ( 'REPEATABLE' 'READ'
+        | 'READ' ('COMMITTED' | 'UNCOMMITTED')
+        | 'SERIALIZABLE'
+        ) (',' 'READ' ('WRITE' | 'ONLY'))?
     ;
 
 optionValueNoOptionType
@@ -1276,11 +1182,9 @@ term
     | term 'COLLATE' name
     | '!' term
     | ('+' | '-' | '~') term
-//    | ('+' | '-' ) term
     | term '^' term
     | term ( '*' | '/' | 'DIV' | '%' | 'MOD' ) term
     | term ('+' | '-') term
-//    | term ('+' | '-') 'INTERVAL' term interval
     | term ('<<' | '>>') term
     | term '&' term
     | term '|' term
@@ -1289,24 +1193,23 @@ term
     | function
     | sumExpr over?
     | windowFunctionCall
-    | 'GROUPING' '(' term (',' term)* ')'
+    | 'GROUPING' terms
     | term 'CONCAT_PIPES' term
-//    | ('!' | 'NOT2') term
     | '{' name term '}'
     | 'MATCH' (qname (',' qname)* | '(' qname (',' qname)* ')') 'AGAINST' '(' term fulltextOptions? ')'
     | 'DEFAULT' '(' qname ')'
     | 'VALUES' '(' qname ')'
 
-    | term  'IS' notRule? ('TRUE' | 'FALSE' | 'UNKNOWN' | 'NULL')
+    | term  'IS' ('NOT')? ('TRUE' | 'FALSE' | 'UNKNOWN' | 'NULL')
     | term 'LIKE' term ('ESCAPE' term)?
     | term 'REGEXP' term
-    | term notRule? 'IN' ('(' select ')' | '(' term (',' term)* ')')
+    | term ('NOT')? 'IN' ('(' select ')' | terms )
     | term 'MEMBER' 'OF'? '(' term ')'
     | term 'BETWEEN' term 'AND' term
     | 'CASE' term? ('WHEN' term 'THEN' term)+ ('ELSE' term)? 'END'
 //    | term 'SOUNDS' 'LIKE' term
 
-    | 'ROW'? '(' term (',' term)* ')'
+    | 'ROW'? terms
     | 'EXISTS'? '(' select ')'
     | ('ALL' | 'ANY') '(' select ')'
 
@@ -1425,17 +1328,6 @@ function
 
     ;
 
-//weightStringLevels
-//    : 'LEVEL' (
-//        real_ulong_number '-' real_ulong_number
-//        | weightStringLevelListItem (',' weightStringLevelListItem)*
-//    )
-//    ;
-
-//weightStringLevelListItem
-//    : real_ulong_number (('ASC' | 'DESC') 'REVERSE'? | 'REVERSE')?
-//    ;
-
 udfExpr
     : term alias?
     ;
@@ -1464,14 +1356,21 @@ castType
     | 'GEOMETRYCOLLECTION'
     ;
 
-// TODO merge dataTyle and castType rules?
+// TODO merge dataType and castType rules?
 dataType
     : ( 'INT' | 'INTEGER' | 'TINYINT' | 'SMALLINT' | 'MEDIUMINT' | 'BIGINT' ) fieldLength? fieldOptions?
+    | 'FLOAT4'
+    | 'FLOAT8'
+    | 'INT1'
+    | 'INT2'
+    | 'INT3'
+    | 'INT4'
+    | 'INT8'
+    | 'MIDDLEINT'
     | ('REAL' | 'DOUBLE' 'PRECISION'?) (floatOptions)? fieldOptions?
     | ('FLOAT' | 'DECIMAL' | 'NUMERIC' | 'FIXED') floatOptions? fieldOptions?
     | 'BIT' fieldLength?
     | ('BOOL' | 'BOOLEAN')
-//    | 'CHAR' fieldLength? charsetWithOptBinary?
     | ('NCHAR' | 'NATIONAL' 'CHAR') fieldLength? 'BINARY'?
     | 'BINARY' fieldLength?
     | (( 'CHAR' | 'CHARACTER' ) 'VARYING'? | 'VARCHAR' ) fieldLength charsetWithOptBinary?
@@ -1509,11 +1408,6 @@ dataType
 
 charset
     : ( 'CHAR' 'SET' | 'CHARACTER' 'SET' | 'CHARSET' ) name
-    ;
-
-notRule
-    : 'NOT'
-//    | 'NOT2'
     ;
 
 // None of the microsecond variants can be used in schedules (e.g. events).
@@ -1619,7 +1513,7 @@ handlerCondition
     : spCondition
     | name
     | 'SQLWARNING'
-    | notRule 'FOUND'
+    | 'NOT' 'FOUND'
     | 'SQLEXCEPTION'
     ;
 
@@ -1729,11 +1623,6 @@ indexType
     : 'BTREE' | 'RTREE' | 'HASH'
     ;
 
-indexOption
-    : commonIndexOption
-    | indexTypeClause
-    ;
-
 
 commonIndexOption
     : 'KEY_BLOCK_SIZE' '='? INTEGER
@@ -1743,23 +1632,19 @@ commonIndexOption
     | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
     ;
 
-visibility
-    : 'VISIBLE'
-    | 'INVISIBLE'
-    ;
-
-indexTypeClause
-    : ('USING' | 'TYPE') indexType
-    ;
-
 fulltextIndexOption
     : commonIndexOption
     | 'WITH' 'PARSER' name
     ;
 
 
+visibility
+    : 'VISIBLE'
+    | 'INVISIBLE'
+    ;
+
+
 fieldLength
-//    : '(' (integer | DECIMAL_NUMBER) ')'
     : '(' ( INTEGER | FLOAT ) ')'
     ;
 
@@ -1779,46 +1664,39 @@ typeDatetimePrecision
     : '(' INTEGER ')'
     ;
 
-createTableOptionsEtc
-    : ( createTableOption (','? createTableOption)* )? createPartitioningEtc?
-    ;
-
-createPartitioningEtc
-    : partitionBy duplicateAsQe?
-    | duplicateAsQe
-    ;
-
-createTableOption
-    : 'ENGINE' '='? name
-    | 'SECONDARY_ENGINE' equal? name
-//    | 'SECONDARY_ENGINE' equal? ( 'NULL' | name )
-    | 'MAX_ROWS' '='? INTEGER
-    | 'MIN_ROWS' '='? INTEGER
+tableOption
+    : 'AUTOEXTEND_SIZE' '='? byteSize
+    | 'AUTO_INCREMENT' '='? INTEGER
     | 'AVG_ROW_LENGTH' '='? INTEGER
-    | 'PASSWORD' '='? string
+    | 'DEFAULT'? ( 'CHAR' 'SET' | 'CHARACTER' 'SET' | 'CHARSET' ) '='? name
+    | 'CHECKSUM' '='? INTEGER
+    | 'DEFAULT'? 'COLLATE' '='? name
     | 'COMMENT' '='? string
     | 'COMPRESSION' '='? string
-    | 'ENCRYPTION' '='? string
-    | 'AUTO_INCREMENT' '='? INTEGER
-    | 'PACK_KEYS' '='? ternaryOption
-    | ( 'STATS_AUTO_RECALC' | 'STATS_PERSISTENT' | 'STATS_SAMPLE_PAGES' ) '='? ternaryOption
-    | ('CHECKSUM' | 'TABLE_CHECKSUM') '='? INTEGER
-    | 'DELAY_KEY_WRITE' '='? INTEGER
-    | 'ROW_FORMAT' '='? ( 'DEFAULT' | 'DYNAMIC' | 'FIXED' | 'COMPRESSED' | 'REDUNDANT' | 'COMPACT' )
-    | 'UNION' '='? '(' qname (',' qname)* ')'
-    | 'DEFAULT'? ( 'CHAR' 'SET' | 'CHARACTER' 'SET' | 'CHARSET' ) '='? name
-    | 'DEFAULT'? 'COLLATE' '='? name
-    | 'INSERT_METHOD' '='? ( 'NO' | 'FIRST' | 'LAST' )
+    | 'CONNECTION' '='? string
     | 'DATA' 'DIRECTORY' '='? string
     | 'INDEX' 'DIRECTORY' '='? string
+    | 'DELAY_KEY_WRITE' '='? INTEGER
+    | 'ENCRYPTION' '='? string
+    | 'ENGINE' '='? name
+    | 'ENGINE_ATTRIBUTE' '='? string
+    | 'INSERT_METHOD' '='? ( 'NO' | 'FIRST' | 'LAST' )
+    | 'KEY_BLOCK_SIZE' '='? INTEGER
+    | 'MAX_ROWS' '='? INTEGER
+    | 'MIN_ROWS' '='? INTEGER
+    | 'PACK_KEYS' '='? ternaryOption
+    | 'PASSWORD' '='? string
+    | 'ROW_FORMAT' '='? ( 'DEFAULT' | 'DYNAMIC' | 'FIXED' | 'COMPRESSED' | 'REDUNDANT' | 'COMPACT' )
+    | 'START' 'TRANSACTION'
+    | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
+    | 'STATS_AUTO_RECALC' '='? ternaryOption
+    | 'STATS_PERSISTENT' '='? ternaryOption
+    | 'STATS_SAMPLE_PAGES' '='? INTEGER
     | 'TABLESPACE' '='? name
     | 'STORAGE' ('DISK' | 'MEMORY')
-    | 'CONNECTION' '='? string
-    | 'KEY_BLOCK_SIZE' '='? INTEGER
-    | 'START' 'TRANSACTION'
-    | 'ENGINE_ATTRIBUTE' '='? string
-    | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
-    | tsOptionAutoextendSize
+//    | 'SECONDARY_ENGINE' equal? name
+    | 'UNION' '='? '(' qname (',' qname)* ')'
+//    | 'TABLE_CHECKSUM' '='? INTEGER
     ;
 
 ternaryOption
@@ -1827,40 +1705,40 @@ ternaryOption
     ;
 
 partitionBy
-    : 'PARTITION' 'BY' partitionTypeDef
-      ( 'PARTITIONS' INTEGER )? subPartitions?
-      ('(' partition (',' partition)* ')')?
+    : 'PARTITION' 'BY'
+      ( hash
+      | ( 'RANGE' | 'LIST' )
+          ( '(' term ')'
+          | 'COLUMNS' '(' (name (',' name)*)? ')'
+          )
+      )
+      ( 'PARTITIONS' INTEGER )?
+      subpartitionBy?
+      ('(' partitionDef (',' partitionDef)* ')')?
     ;
 
-partitionTypeDef
-    : keyOrHash
-    | ('RANGE' | 'LIST') ( '(' term ')' | 'COLUMNS' '(' (name (',' name)*)? ')' )
-    ;
-
-subPartitions
-    : 'SUBPARTITION' 'BY' keyOrHash
+subpartitionBy
+    : 'SUBPARTITION' 'BY' hash
       ('SUBPARTITIONS' INTEGER)?
     ;
 
-keyOrHash
+hash
     : 'LINEAR'?
       ( 'HASH' '(' term ')'
       | 'KEY' ('ALGORITHM' '=' INTEGER)? '(' ( name (',' name)* )? ')'
       )
       ;
 
-partition
+partitionDef
     : 'PARTITION' name
-        ( 'VALUES' 'LESS' 'THAN' ( '(' term (',' term)* ')' | 'MAXVALUE' )
-        | 'VALUES' 'IN' partitionValuesIn
+        ( 'VALUES'
+            ( 'LESS' 'THAN' ( terms | 'MAXVALUE' )
+            | 'IN' terms
+//            | '(' '(' term (',' term)* ')' ( ',' '(' term (',' term)* ')' )* ')')
+            )
         )?
         partitionOption*
         ( '(' subpartition (',' subpartition)* ')' )?
-    ;
-
-partitionValuesIn
-    : '(' term (',' term)* ')'
-    | '(' '(' term (',' term)* ')' ( ',' '(' term (',' term)* ')' )* ')'
     ;
 
 partitionOption
@@ -1885,7 +1763,7 @@ exists
     ;
 
 notExists
-    : 'IF' notRule 'EXISTS'
+    : 'IF' 'NOT' 'EXISTS'
     ;
 
 ignoreUnknownUser
@@ -2060,7 +1938,7 @@ byteSize
 
 equal
     : '='
-//    | ':='
+    | ':='
     ;
 
 scope
