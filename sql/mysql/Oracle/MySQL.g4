@@ -1199,12 +1199,12 @@ term
     | 'DEFAULT' '(' qname ')'
     | 'VALUES' '(' qname ')'
 
-    | term  'IS' ('NOT')? ('TRUE' | 'FALSE' | 'UNKNOWN' | 'NULL')
-    | term 'LIKE' term ('ESCAPE' term)?
-    | term 'REGEXP' term
-    | term ('NOT')? 'IN' ('(' select ')' | terms )
-    | term 'MEMBER' 'OF'? '(' term ')'
-    | term 'BETWEEN' term 'AND' term
+    | term 'IS' 'NOT'? ('TRUE' | 'FALSE' | 'UNKNOWN' | 'NULL')
+    | term 'NOT'? 'LIKE' term ('ESCAPE' term)?
+    | term 'NOT'? ( 'REGEXP' | 'RLIKE' ) term
+    | term 'NOT'? 'IN' ('(' select ')' | terms )
+    | term 'MEMBER' 'OF'? '(' literal ')'
+    | term 'NOT'? 'BETWEEN' term 'AND' term
     | 'CASE' term? ('WHEN' term 'THEN' term)+ ('ELSE' term)? 'END'
 //    | term 'SOUNDS' 'LIKE' term
 
