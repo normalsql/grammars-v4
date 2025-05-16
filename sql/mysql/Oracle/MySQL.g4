@@ -360,7 +360,7 @@ tableElement
 
 storedRoutineBody
     : compoundStatement
-    | 'AS' (STRING | DOLLAR_QUOTED_STRING_TEXT)
+    | 'AS' string
     ;
 
 routineCreateOption
@@ -1201,7 +1201,7 @@ term
     | '{' name term '}'
     | 'MATCH' (qname (',' qname)* | '(' qname (',' qname)* ')') 'AGAINST' '(' term fulltextOptions? ')'
     | 'DEFAULT' '(' qname ')'
-    | 'VALUES' '(' qname ')'
+//    | 'VALUES' '(' qname ')'
 
     | term 'IS' 'NOT'? ('TRUE' | 'FALSE' | 'UNKNOWN' | 'NULL')
     | term 'NOT'? 'LIKE' term ('ESCAPE' term)?
@@ -1853,7 +1853,7 @@ user
     ;
 
 userName
-    : ( STRING | ID ) LOCAL?
+    : ( string | ID ) LOCAL?
     ;
 
 like
@@ -1888,28 +1888,31 @@ qname
     | GLOBAL
     ;
 
-signedLiteral
-    : literal
-    | ( '+' | '-' )? INTEGER
-    ;
+//signedLiteral
+//    : literal
+//    | ( '+' | '-' )? INTEGER
+//    ;
 
 literal
-//    : string
-    : name
+//    : name
+    : ID
+    | keyword
+//    | string
+    | CHARSET? STRING+
+    | NATIONAL STRING*
+    | BLOB
     | ( '+' | '-' )? INTEGER
-    | SIZE
     | ( '+' | '-' )? FLOAT
+    | SIZE
     | datetime
     | null
-//    | 'TRUE'
-//    | 'FALSE'
     | PARAM
     | LOCAL
-//    | GLOBAL
+    | GLOBAL
     ;
 
 string
-    : STRING+
+    : CHARSET? STRING+
     | NATIONAL STRING*
     | BLOB
     ;
@@ -1919,10 +1922,12 @@ strings
     ;
 
 null
-    : 'NULL' | '\\N' ;
+    : 'NULL' | NOPE ;
+
+
 
 datetime
-    : ( 'DATE' | 'TIME' | 'TIMESTAMP' ) STRING ;
+    : ( 'DATE' | 'TIME' | 'TIMESTAMP' ) string ;
 
 floatOptions
     : fieldLength
@@ -2721,33 +2726,31 @@ SIZE
 ID
     : '"' ('\\'? .)*? '"'
     | '`' ( ~'`' | '``' )* '`'
-    | [A-Z0-9_$\u0080-\uFFFF]+
+    | [A-Z0-9$\u0080-\uFFFF] [A-Z0-9_$\u0080-\uFFFF]*
     ;
+
+CHARSET
+  : '_' [A-Z0-9$\u0080-\uFFFF]+ ;
 
 LOCAL
     : '@' ( ID | STRING | IPV4 | IPV6 ) ;
-
-
 
 GLOBAL
     : '@' '@' ( ID ( '.' ID )? )? ;
 
 STRING
-    : '\'' ('\\'? .)*? '\''
-    ;
+    : '\'' ('\\'? .)*? '\'' ;
 
 NATIONAL
-    : 'N' STRING
-    ;
+    : 'N' STRING ;
 
 BLOB
     : 'x\'' BYTES '\''
     | 'b\'' [01]+ '\''
     ;
 
-//// TODO: check in the semantic phase that starting and ending tags are the same.
-//DOLLAR_QUOTED_STRING_TEXT
-//   : '$' DOLLAR_QUOTE_TAG_CHAR* '$' .*? '$' DOLLAR_QUOTE_TAG_CHAR* '$' ;
+NOPE options { caseInsensitive = false; }
+    : '\\N' ;
 
 BLOCK_COMMENT
     : '/*' .*? '*/' -> channel(HIDDEN)
@@ -2765,18 +2768,13 @@ WHITESPACE
     : [ \t\f\r\n]+ -> channel(HIDDEN)
     ;
 
-IPV4 : DIGITS '.' DIGITS '.' DIGITS '.' DIGITS;
+fragment IPV4 : DIGITS '.' DIGITS '.' DIGITS '.' DIGITS;
 
-IPV6 : GROUPS ( '::' GROUPS? )? ;
+fragment IPV6 : GROUPS ( '::' GROUPS? )? ;
 
-GROUPS : GROUP ( ':' GROUP )* ;
+fragment GROUPS : GROUP ( ':' GROUP )* ;
 
-GROUP : BYTE BYTE BYTE BYTE ;
-
-//fragment DOLLAR_QUOTE_TAG_CHAR
-//    : [0-9A-Z_\u0080-\uFFFF]
-//    ;
-
+fragment GROUP : BYTE BYTE BYTE BYTE ;
 
 fragment DIGITS : [0-9]+ ;
 
