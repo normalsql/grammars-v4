@@ -1370,15 +1370,15 @@ dataType
     | 'INT4'
     | 'INT8'
     | 'MIDDLEINT'
-    | ('REAL' | 'DOUBLE' 'PRECISION'?) (floatOptions)? fieldOptions?
+    | ('REAL' | 'DOUBLE' 'PRECISION'?) floatOptions? fieldOptions?
     | ('FLOAT' | 'DECIMAL' | 'NUMERIC' | 'FIXED') floatOptions? fieldOptions?
     | 'BIT' fieldLength?
     | ('BOOL' | 'BOOLEAN')
     | ('NCHAR' | 'NATIONAL' 'CHAR') fieldLength? 'BINARY'?
     | 'BINARY' fieldLength?
-    | (( 'CHAR' | 'CHARACTER' ) 'VARYING'? | 'VARCHAR' ) fieldLength charsetWithOptBinary?
+    | (( 'CHAR' | 'CHARACTER' ) 'VARYING'? | 'VARCHAR' ) fieldLength? charsetWithOptBinary?
     | ( 'NATIONAL' 'VARCHAR' | 'NVARCHAR' | 'NCHAR' 'VARCHAR' | 'NATIONAL' 'CHAR' 'VARYING' | 'NCHAR' 'VARYING' ) fieldLength 'BINARY'?
-    | 'VARBINARY' fieldLength
+    | 'VARBINARY' fieldLength?
     | 'YEAR' fieldLength? fieldOptions?
     | 'DATE'
     | 'TIME' typeDatetimePrecision?
