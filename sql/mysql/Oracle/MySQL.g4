@@ -1210,11 +1210,11 @@ term
     | term 'MEMBER' 'OF'? '(' literal ')'
     | term 'NOT'? 'BETWEEN' term 'AND' term
     | 'CASE' term? ('WHEN' term 'THEN' term)+ ('ELSE' term)? 'END'
-//    | term 'SOUNDS' 'LIKE' term
+    | term 'SOUNDS' 'LIKE' term
 
     | 'ROW'? terms
     | 'EXISTS'? '(' select ')'
-    | ('ALL' | 'ANY') '(' select ')'
+    | ('ALL' | 'ANY' | 'SOME') '(' select ')'
 
     | 'NOT' term
     | term ('AND' | '&&') term
