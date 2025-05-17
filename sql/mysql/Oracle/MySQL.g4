@@ -51,15 +51,60 @@ statements
 // TODO: inlining all the statements for now. will re-refactor as needed.
 
 statement
-    // DDL
-    : 'ALTER' onlineOption? 'TABLE' qname alterTableActions?
+    : 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? name createDatabaseOption*
     | 'ALTER' ( 'DATABASE' | 'SCHEMA' ) name (createDatabaseOption | 'READ' 'ONLY' '='? ternaryOption)+
-    | 'ALTER' 'PROCEDURE' qname routineCreateOption*
-    | 'ALTER' 'FUNCTION' qname routineCreateOption*
-    | 'ALTER' viewAlgorithm? definer? security? 'VIEW' qname columns? 'AS' select viewCheckOption?
+    | 'DROP' ( 'DATABASE' | 'SCHEMA' ) exists? name
+
+    | 'CREATE' definer? 'EVENT' notExists? qname 'ON' 'SCHEDULE' schedule ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ('ENABLE' | 'DISABLE' ('ON' replica)?)? ( 'COMMENT' string )? 'DO' compoundStatement
     | 'ALTER' definer? 'EVENT' qname ('ON' 'SCHEDULE' schedule)? ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ('RENAME' 'TO' name)? ( 'ENABLE' | 'DISABLE' ('ON' replica)? )? ('COMMENT' string)? ('DO' compoundStatement)?
+    | 'DROP' 'EVENT' exists? qname
+
+    | 'CREATE' 'AGGREGATE'? 'FUNCTION' notExists? name 'RETURNS' ( 'STRING' | 'INT' | 'REAL' | 'DECIMAL' ) 'SONAME' string
+    | 'CREATE' definer? 'FUNCTION' notExists? qname '(' ( functionParameter (',' functionParameter)* )? ')' 'RETURNS' dataType collate? routineCreateOption* storedRoutineBody
+    | 'ALTER' 'FUNCTION' qname routineCreateOption*
+    | 'DROP' 'FUNCTION' exists? qname
+    | 'CREATE' definer? 'PROCEDURE' notExists? qname '(' ( procedureParameter (',' procedureParameter)* )? ')' routineCreateOption* storedRoutineBody
+    | 'ALTER' 'PROCEDURE' qname routineCreateOption*
+    | 'DROP' 'PROCEDURE' exists? qname
+
+    | 'CREATE' ( 'UNIQUE' | 'FULLTEXT' | 'SPATIAL')? 'INDEX' name ('USING' ('BTREE' | 'HASH'))? 'ON' qname '(' keyPart (',' keyPart)* ')' createIndexOption*
+    | 'DROP' onlineOption? 'INDEX' qname 'ON' qname ('ALGORITHM' '='? name | 'LOCK' '='? name)*
+
+    | 'ALTER' 'LOGFILE' 'GROUP' name 'ADD' 'UNDOFILE' string alterLogfileGroupOptions?
+    | 'CREATE' 'LOGFILE' 'GROUP' name 'ADD' 'UNDOFILE' string (logfileGroupOption (','? logfileGroupOption)*)?
+    | 'DROP' 'LOGFILE' 'GROUP' name ( dropLogfileGroupOption (','? dropLogfileGroupOption)* )?
+
+    | 'CREATE' 'RESOURCE' 'GROUP' name 'TYPE' equal? ( 'USER' | 'SYSTEM' ) resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable?
+    | 'ALTER' 'RESOURCE' 'GROUP' name resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable? 'FORCE'?
+    | 'SET' 'RESOURCE' 'GROUP' name ('FOR' INTEGER (','? INTEGER)*)?
+    | 'DROP' 'RESOURCE' 'GROUP' name 'FORCE'?
+
+    | 'CREATE' 'ROLE' notExists? roleList
+    | 'DROP' 'ROLE' exists? roleList
+
+    | 'CREATE' 'SERVER' name 'FOREIGN' 'DATA' 'WRAPPER' name 'OPTIONS' '(' serverOption (',' serverOption)* ')'
+    | 'ALTER' 'SERVER' name 'OPTIONS' '(' serverOption (',' serverOption)* ')'
+    | 'DROP' 'SERVER' exists? name
+
+
+    | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ('(' tableElementList ')')? ( tableOption (','? tableOption)* )? partitionBy? (('REPLACE' | 'IGNORE')? 'AS'? select)?
+    | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ( 'LIKE' qname | '(' 'LIKE' qname ')' )
+    | 'ALTER' onlineOption? 'TABLE' qname alterTableActions?
+    | 'RENAME' ('TABLE' | 'TABLES') renamePair ( ',' renamePair )*
+    | 'DROP' 'TEMPORARY'? ('TABLE' | 'TABLES') exists? qname (',' qname)* ( 'RESTRICT' | 'CASCADE' )?
+
+    | 'CREATE' 'TABLESPACE' name ('ADD' 'DATAFILE' string)? ( 'USE' 'LOGFILE' 'GROUP' name )? tablespaceOptions?
     | 'ALTER' 'TABLESPACE' name ( ('ADD' | 'DROP') 'DATAFILE' string alterTablespaceOptions? | 'RENAME' 'TO' name | alterTablespaceOptions )
+    | 'DROP' 'TABLESPACE' name ( dropLogfileGroupOption (','? dropLogfileGroupOption)* )?
+
+    | 'CREATE' definer? 'TRIGGER' notExists? qname ( 'BEFORE' | 'AFTER' ) ('INSERT' | 'UPDATE' | 'DELETE') 'ON' qname 'FOR' 'EACH' 'ROW' (('FOLLOWS' | 'PRECEDES') name)? compoundStatement
+    | 'DROP' 'TRIGGER' exists? qname
+
+    | 'CREATE' 'UNDO' 'TABLESPACE' name 'ADD' 'DATAFILE' string undoTableSpaceOptions?
     | 'ALTER' 'UNDO' 'TABLESPACE' name 'SET' ( 'ACTIVE' | 'INACTIVE' ) undoTableSpaceOptions?
+    | 'DROP' 'UNDO' 'TABLESPACE' name undoTableSpaceOptions?
+
+    | 'CREATE' 'USER' notExists? createUser (',' createUser)* ('DEFAULT' 'ROLE' roleList)? createUserTail
     | 'ALTER' 'USER' exists?  ( createUser (',' createUser)* | alterUser (',' alterUser)* ) createUserTail
     | 'ALTER' 'USER' exists?  userFunction
         ( ('IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' | 'IDENTIFIED' 'BY' string) replacePassword? retainCurrentPassword?
@@ -68,45 +113,24 @@ statement
         )
 //    | 'ALTER' 'USER' exists?  user ( 'DEFAULT' 'ROLE' ('ALL' | 'NONE' | roleList) | userRegistration? )
     | 'ALTER' 'USER' exists?  user 'DEFAULT' 'ROLE' ('ALL' | 'NONE' | userName ( ',' userName )* )
-    | 'ALTER' 'LOGFILE' 'GROUP' name 'ADD' 'UNDOFILE' string alterLogfileGroupOptions?
-    | 'ALTER' 'SERVER' name 'OPTIONS' '(' serverOption (',' serverOption)* ')'
-    | 'ALTER' 'INSTANCE' 'ROTATE' name 'MASTER' 'KEY'
-    | 'ALTER' 'RELOAD' 'TLS' ( 'NO' 'ROLLBACK' 'ON' 'ERROR' | 'FOR' 'CHANNEL' name ( 'NO' 'ROLLBACK' 'ON' 'ERROR' )? )
-    | 'ALTER' ('ENABLE' | 'DISABLE') name name
-    | 'ALTER' 'RELOAD' 'KEYRING'
-    | 'CREATE' 'AGGREGATE'? 'FUNCTION' notExists? name 'RETURNS' ( 'STRING' | 'INT' | 'REAL' | 'DECIMAL' ) 'SONAME' string
-    | 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? name createDatabaseOption*
-    | 'CREATE' definer? 'FUNCTION' notExists? qname '(' ( functionParameter (',' functionParameter)* )? ')' 'RETURNS' dataType collate? routineCreateOption* storedRoutineBody
-    | 'CREATE' definer? 'PROCEDURE' notExists? qname '(' ( procedureParameter (',' procedureParameter)* )? ')' routineCreateOption* storedRoutineBody
-    | 'CREATE' definer? 'TRIGGER' notExists? qname ( 'BEFORE' | 'AFTER' ) ('INSERT' | 'UPDATE' | 'DELETE') 'ON' qname 'FOR' 'EACH' 'ROW' (('FOLLOWS' | 'PRECEDES') name)? compoundStatement
-    | 'CREATE' createIndex
-    | 'CREATE' 'LOGFILE' 'GROUP' name 'ADD' 'UNDOFILE' string (logfileGroupOption (','? logfileGroupOption)*)?
-    | 'CREATE' 'SERVER' name 'FOREIGN' 'DATA' 'WRAPPER' name 'OPTIONS' '(' serverOption (',' serverOption)* ')'
-    | 'CREATE' 'TABLESPACE' name ('ADD' 'DATAFILE' string)? ( 'USE' 'LOGFILE' 'GROUP' name )? tablespaceOptions?
-    | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ('(' tableElementList ')')? ( tableOption (','? tableOption)* )? partitionBy? (('REPLACE' | 'IGNORE')? 'AS'? select)?
-    | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ( 'LIKE' qname | '(' 'LIKE' qname ')' )
+    | 'DROP' 'USER' exists? user (',' user)*
+    | 'RENAME' 'USER' user 'TO' user ( ',' user 'TO' user )*
+
     | 'CREATE' ('OR' 'REPLACE' viewAlgorithm? | viewAlgorithm)? definer? security? 'VIEW' qname columns? 'AS' select viewCheckOption?
-    | 'CREATE' definer? 'EVENT' notExists? qname 'ON' 'SCHEDULE' schedule ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ('ENABLE' | 'DISABLE' ('ON' replica)?)? ( 'COMMENT' string )? 'DO' compoundStatement
-    | 'CREATE' 'ROLE' notExists? roleList
-    | 'CREATE' orReplace? 'SPATIAL' 'REFERENCE' 'SYSTEM' notExists? INTEGER srsAttribute*
-    | 'CREATE' 'UNDO' 'TABLESPACE' name 'ADD' 'DATAFILE' string undoTableSpaceOptions?
-    | 'DROP' ( 'DATABASE' | 'SCHEMA' ) exists? name
-    | 'DROP' 'EVENT' exists? qname
-    | 'DROP' 'FUNCTION' exists? qname
-    | 'DROP' 'PROCEDURE' exists? qname
-    | 'DROP' onlineOption? 'INDEX' qname 'ON' qname ('ALGORITHM' '='? name | 'LOCK' '='? name)*
-    | 'DROP' 'LOGFILE' 'GROUP' name ( dropLogfileGroupOption (','? dropLogfileGroupOption)* )?
-    | 'DROP' 'SERVER' exists? name
-    | 'DROP' 'TEMPORARY'? ('TABLE' | 'TABLES') exists? qname (',' qname)* ( 'RESTRICT' | 'CASCADE' )?
-    | 'DROP' 'TABLESPACE' name ( dropLogfileGroupOption (','? dropLogfileGroupOption)* )?
-    | 'DROP' 'TRIGGER' exists? qname
+    | 'ALTER' viewAlgorithm? definer? security? 'VIEW' qname columns? 'AS' select viewCheckOption?
     | 'DROP' 'VIEW' exists? qname (',' qname)* ('RESTRICT' | 'CASCADE')?
-    | 'DROP' 'ROLE' exists? roleList
+
+    | 'ALTER' 'INSTANCE' 'ROTATE' name 'MASTER' 'KEY'
+
+    | 'ALTER' 'RELOAD' 'TLS' ( 'NO' 'ROLLBACK' 'ON' 'ERROR' | 'FOR' 'CHANNEL' name ( 'NO' 'ROLLBACK' 'ON' 'ERROR' )? )
+    | 'ALTER' 'RELOAD' 'KEYRING'
+    | 'ALTER' ('ENABLE' | 'DISABLE') name name
+
+
+
+    | 'CREATE' orReplace? 'SPATIAL' 'REFERENCE' 'SYSTEM' notExists? INTEGER srsAttribute*
     | 'DROP' 'SPATIAL' 'REFERENCE' 'SYSTEM' exists? INTEGER
-    | 'DROP' 'UNDO' 'TABLESPACE' name undoTableSpaceOptions?
-    | 'RENAME' ('TABLE' | 'TABLES') renamePair ( ',' renamePair )*
-    | 'TRUNCATE' 'TABLE'? qname
-    | 'IMPORT' 'TABLE' 'FROM' strings
+
 
     | 'CALL' qname ('(' (term (',' term)*)? ')')?
     | delete
@@ -126,12 +150,14 @@ statement
     | 'LOCK' ('TABLES' | 'TABLE') lockItem (',' lockItem)*
     | 'LOCK' 'INSTANCE' 'FOR' 'BACKUP'
     | 'UNLOCK' ( 'TABLES' | 'TABLE' | 'INSTANCE')
+
     | 'XA' ('START' | 'BEGIN') xid ('JOIN' | 'RESUME')?
     | 'XA' 'END' xid ('SUSPEND' ('FOR' 'MIGRATE')?)?
     | 'XA' 'PREPARE' xid
     | 'XA' 'COMMIT' xid ('ONE' 'PHASE')?
     | 'XA' 'ROLLBACK' xid
     | 'XA' 'RECOVER' ('CONVERT' 'XID')?
+
     | 'PURGE' ('BINARY' | 'MASTER') 'LOGS' ( 'TO' string | 'BEFORE' term )
     | 'CHANGE' ('MASTER' | 'REPLICATION' 'SOURCE') 'TO' sourceDefinitions channel?
     | 'RESET' resetOption (',' resetOption)*
@@ -149,10 +175,7 @@ statement
     | 'CLONE' 'REMOTE' ('FOR' 'REPLICATION')?
     | 'CLONE' 'INSTANCE' 'FROM' user ':' INTEGER 'IDENTIFIED' 'BY' string (ssl | 'DATA' 'DIRECTORY' equal? string ssl?)?
 
-    | 'CREATE' 'USER' notExists? createUser (',' createUser)* ('DEFAULT' 'ROLE' roleList)? createUserTail
-    | dropUserStatement
     | grantStatement
-    | renameUserStatement
     | revokeStatement
     | setRoleStatement
     | 'ANALYZE' noLogging? 'TABLE' qname (',' qname)* histogram?
@@ -172,6 +195,10 @@ statement
 //    | 'SET' scope? 'DEFAULT'? qname equal term (',' (scope 'DEFAULT'? qname equal term | optionValueNoOptionType))*
 //    | 'SET' 'PASSWORD' ('FOR' user)? equal ( string replacePassword? retainCurrentPassword? | 'PASSWORD' '(' string ')' )
 //    | 'SET' 'PASSWORD' ('FOR' user)? 'TO' 'RANDOM' replacePassword? retainCurrentPassword?
+
+    | 'TRUNCATE' 'TABLE'? qname
+    | 'IMPORT' 'TABLE' 'FROM' strings
+
 
     | 'SHOW' 'DATABASES' like?
     | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? 'TABLES' inDb? like?
@@ -215,10 +242,7 @@ statement
     | 'SHOW' 'CREATE' 'FUNCTION' 'CODE' qname
     | 'SHOW' 'CREATE' 'EVENT' qname
     | 'SHOW' 'CREATE' 'USER' user
-    | 'CREATE' 'RESOURCE' 'GROUP' name 'TYPE' equal? ( 'USER' | 'SYSTEM' ) resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable?
-    | 'ALTER' 'RESOURCE' 'GROUP' name resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable? 'FORCE'?
-    | 'SET' 'RESOURCE' 'GROUP' name ('FOR' INTEGER (','? INTEGER)*)?
-    | 'DROP' 'RESOURCE' 'GROUP' name 'FORCE'?
+
     | 'BINLOG' string
     | 'CACHE' 'INDEX' keyCacheListOrParts 'IN' name
     | 'FLUSH' noLogging? ( flushTables | flushOption (',' flushOption)* )
@@ -233,6 +257,10 @@ statement
     | 'RESTART'
     | 'GET' ('CURRENT' | 'STACKED')? 'DIAGNOSTICS' ( statementInformationItem (',' statementInformationItem)* | 'CONDITION' literal conditionInformationItem ( ',' conditionInformationItem )* )
     | ( 'SIGNAL' signalCondition | 'RESIGNAL' signalCondition? ) ( 'SET' signalItem (',' signalItem)* )?
+
+//    | 'CONNECTION' name
+//    | 'sync_slave_with_master'
+//    | 'DELIMITER' .
     ;
 
 setVariable : ( scope? qname | LOCAL | GLOBAL ) equal term ;
@@ -372,12 +400,6 @@ routineCreateOption
     | 'MODIFIES' 'SQL' 'DATA'
     | security
     | 'NOT'? 'DETERMINISTIC'
-    ;
-
-createIndex
-    : ( 'UNIQUE' | 'FULLTEXT' | 'SPATIAL')? 'INDEX' name ('USING' ('BTREE' | 'HASH'))?
-        'ON' qname '(' keyPart (',' keyPart)* ')'
-        createIndexOption*
     ;
 
 createIndexOption
@@ -617,19 +639,21 @@ windowFrameExtent
     ;
 
 windowFrameStart
-    : 'UNBOUNDED' 'PRECEDING'
-    | INTEGER 'PRECEDING'
-    | PARAM 'PRECEDING'
-    | 'INTERVAL' term interval 'PRECEDING'
+    : literal 'PRECEDING'
+//    : 'UNBOUNDED' 'PRECEDING'
+//    | INTEGER 'PRECEDING'
+//    | PARAM 'PRECEDING'
+//    | 'INTERVAL' term interval 'PRECEDING'
     | 'CURRENT' 'ROW'
     ;
 
 windowFrameBound
     : windowFrameStart
-    | 'UNBOUNDED' 'FOLLOWING'
-    | INTEGER 'FOLLOWING'
-    | PARAM 'FOLLOWING'
-    | 'INTERVAL' term interval 'FOLLOWING'
+    | literal 'FOLLOWING'
+//    | 'UNBOUNDED' 'FOLLOWING'
+//    | INTEGER 'FOLLOWING'
+//    | PARAM 'FOLLOWING'
+//    | 'INTERVAL' term interval 'FOLLOWING'
     ;
 
 windowFrameBetween
@@ -941,10 +965,6 @@ accountLockPasswordExpireOptions
     | 'PASSWORD_LOCK_TIME' (INTEGER | 'UNBOUNDED')
     ;
 
-dropUserStatement
-    : 'DROP' 'USER' exists? user (',' user)*
-    ;
-
 grantStatement
     : 'GRANT' roleOrPrivilegesList 'TO' user (',' user)* ( 'WITH' 'ADMIN' 'OPTION' )?
     | 'GRANT' (roleOrPrivilegesList | 'ALL' 'PRIVILEGES'?) 'ON' aclType? grantIdentifier 'TO' grantTargetList requireClause? grantOptions? ('AS' 'USER' withRoles?)?
@@ -971,10 +991,6 @@ withRoles
         | 'NONE'
         | 'DEFAULT'
     )
-    ;
-
-renameUserStatement
-    : 'RENAME' 'USER' user 'TO' user ( ',' user 'TO' user )*
     ;
 
 revokeStatement
