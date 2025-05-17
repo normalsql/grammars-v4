@@ -985,10 +985,10 @@ revokeStatement
             ( 'ON' aclType? grantIdentifier
             | ',' 'GRANT' 'OPTION'
             )
-        'FROM' user (',' user)*
+            'FROM' user (',' user)*
         | 'PROXY' 'ON' user 'FROM' user (',' user)*
         )
-        ignoreUnknownUser?
+        ('IGNORE' 'UNKNOWN' 'USER')?
     ;
 
 aclType
@@ -1002,7 +1002,7 @@ roleOrPrivilegesList
     ;
 
 roleOrPrivilege
-    : ( name columns? | name name )
+    : ( name columns? | userName )
     | ('SELECT' | 'INSERT' | 'UPDATE' | 'REFERENCES') columns?
     | ( 'DELETE' | 'USAGE' | 'INDEX' | 'DROP' | 'EXECUTE' | 'RELOAD' | 'SHUTDOWN' | 'PROCESS' | 'FILE' | 'PROXY' | 'SUPER' | 'EVENT' | 'TRIGGER' )
     | 'GRANT' 'OPTION'
@@ -1031,8 +1031,8 @@ grantOption
 setRoleStatement
     : 'SET' 'ROLE' roleList
     | 'SET' 'ROLE' ('NONE' | 'DEFAULT')
-    | 'SET' 'DEFAULT' 'ROLE' (roleList | 'NONE' | 'ALL') 'TO' roleList
     | 'SET' 'ROLE' 'ALL' ('EXCEPT' roleList)?
+    | 'SET' 'DEFAULT' 'ROLE' (roleList | 'NONE' | 'ALL') 'TO' roleList
     ;
 
 roleList
@@ -1172,10 +1172,9 @@ explainableStatement
 
 term
     : qname
-    | term ( '->' | '->>' ) string
     | literal
+    | term ( '->' | '->>' ) string
     | term 'AT' 'LOCAL'
-    | 'INTERVAL' term interval
     | 'BINARY' term
     | 'CAST' '(' term 'AS' castType 'ARRAY'? ')'
     | 'CAST' '(' term 'AT' 'TIME' 'ZONE' 'INTERVAL'? string 'AS' 'DATETIME' typeDatetimePrecision ')'
@@ -1193,8 +1192,7 @@ term
     | term '|' term
     | term compOp term
 
-    | function
-    | sumExpr over?
+    | function over?
     | windowFunctionCall
     | 'GROUPING' terms
     | term 'CONCAT_PIPES' term
@@ -1222,6 +1220,9 @@ term
     | term ('OR' | '||') term
     | qname ':=' term
     ;
+
+interval
+  : 'INTERVAL' term timeUnitToo ;
 
 compOp
     : '=' | '!=' | '<>' | '<=>' | '>=' | '>' | '<=' | '<' ;
@@ -1263,7 +1264,10 @@ fulltextOptions
 
 function
     // Function names that are keywords.
-    : 'CHAR' '(' term (',' term)* ('USING' name)? ')'
+    : ID '(' ( udfExpr ( ',' udfExpr )* )? ')'
+    | qname '(' (term (',' term)* )? ')'
+
+    | 'CHAR' '(' term (',' term)* ('USING' name)? ')'
     | 'CURRENT_USER' ('(' ')')?
     | 'DATE' '(' term ')'
     | 'DAY' '(' term ')'
@@ -1284,18 +1288,18 @@ function
     | 'YEAR' '(' term ')'
 
     // Function names that are not keywords.
-    | ('ADDDATE' | 'SUBDATE') '(' term ',' ( term | 'INTERVAL' term interval ) ')'
+    | ('ADDDATE' | 'SUBDATE') '(' term ',' term ')'
     | 'CURDATE' ('(' ')')?
     | 'CURTIME' ('(' (INTEGER)? ')')?
-    | ('DATE_ADD' | 'DATE_SUB') '(' term ',' 'INTERVAL' term interval ')'
-    | 'EXTRACT' '(' interval 'FROM' term ')'
+    | ('DATE_ADD' | 'DATE_SUB') '(' term ',' interval ')'
+    | 'EXTRACT' '(' timeUnitToo 'FROM' term ')'
     | 'GET_FORMAT' '(' ('DATE' | 'TIME' | 'DATETIME' | 'TIMESTAMP') ',' term ')'
     | 'LOG' '(' term ( ',' term )? ')'
     | now
     | 'POSITION' '(' term 'IN' term ')'
     | 'SUBSTRING' '(' term ( ',' term (',' term)? | 'FROM' term ('FOR' term)? ) ')'
     | 'SYSDATE' ('(' (INTEGER)? ')')?
-    | ('TIMESTAMPADD' | 'TIMESTAMPDIFF') '(' intervalTimeStamp ',' term ',' term ')'
+    | ('TIMESTAMPADD' | 'TIMESTAMPDIFF') '(' timeUnit ',' term ',' term ')'
     | 'UTC_DATE' ('(' ')')?
     | 'UTC_TIME' ('(' (INTEGER)? ')')?
     | 'UTC_TIMESTAMP' ('(' (INTEGER)? ')')?
@@ -1326,9 +1330,16 @@ function
     | 'POINT' '(' term ',' term ')'
     | 'POLYGON' '(' term (',' term)* ')'
 
-    | ID '(' ( udfExpr ( ',' udfExpr )* )? ')'
-    | qname '(' (term (',' term)* )? ')'
-
+    | 'AVG' '(' 'DISTINCT'? 'ALL'? term ')'
+    | ('BIT_AND' | 'BIT_OR' | 'BIT_XOR') '(' 'ALL'? term ')'
+    | 'JSON_ARRAYAGG' '(' 'ALL'? term ')'
+    | 'JSON_OBJECTAGG' '(' 'ALL'? term ',' 'ALL'? term ')'
+    | 'ST_COLLECT' '(' 'DISTINCT'? 'ALL'? term ')'
+    | 'COUNT' '(' ( 'ALL'? '*' | 'ALL'? term | 'DISTINCT' term (',' term)* ) ')'
+    | ('MIN' | 'MAX') '(' 'DISTINCT'? 'ALL'? term ')'
+    | ( 'STD' | 'VARIANCE' | 'STDDEV_SAMP' | 'VAR_SAMP' | 'SUM' ) '(' 'ALL'? term ')'
+    | 'SUM' '(' 'DISTINCT' 'ALL'? term ')'
+    | 'GROUP_CONCAT' '(' 'DISTINCT'? term (',' term)* orderBy? ( 'SEPARATOR' string )? ')'
     ;
 
 udfExpr
@@ -1413,9 +1424,8 @@ charset
     : ( 'CHAR' 'SET' | 'CHARACTER' 'SET' | 'CHARSET' ) name
     ;
 
-// None of the microsecond variants can be used in schedules (e.g. events).
-interval
-    : intervalTimeStamp
+timeUnitToo
+    : timeUnit
     | 'SECOND_MICROSECOND'
     | 'MINUTE_MICROSECOND'
     | 'MINUTE_SECOND'
@@ -1429,7 +1439,7 @@ interval
     | 'YEAR_MONTH'
     ;
 
-intervalTimeStamp
+timeUnit
     : 'MICROSECOND'
     | 'SECOND'
     | 'MINUTE'
@@ -1549,7 +1559,7 @@ signalName
 
 schedule
     : 'AT' term
-    | 'EVERY' term interval ('STARTS' term)? ('ENDS' term)?
+    | 'EVERY' term timeUnitToo ('STARTS' term)? ('ENDS' term)?
     ;
 
 checkOrReferences
@@ -1694,7 +1704,7 @@ tableOption
     | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
     | 'STATS_AUTO_RECALC' '='? ternaryOption
     | 'STATS_PERSISTENT' '='? ternaryOption
-    | 'STATS_SAMPLE_PAGES' '='? INTEGER
+    | 'STATS_SAMPLE_PAGES' '='? ternaryOption
     | 'TABLESPACE' '='? name
     | 'STORAGE' ('DISK' | 'MEMORY')
 //    | 'SECONDARY_ENGINE' equal? name
@@ -1767,10 +1777,6 @@ exists
 
 notExists
     : 'IF' 'NOT' 'EXISTS'
-    ;
-
-ignoreUnknownUser
-    : 'IGNORE' 'UNKNOWN' 'USER'
     ;
 
 procedureParameter
@@ -1853,7 +1859,8 @@ user
     ;
 
 userName
-    : ( string | ID ) LOCAL?
+//    : ( ID | string | keyword ) LOCAL?
+    : ( ID | STRING | QUOTED | keyword ) LOCAL?
     ;
 
 like
@@ -1897,10 +1904,13 @@ literal
 //    : name
     : ID
     | keyword
-//    | string
-    | CHARSET? STRING+
-    | NATIONAL STRING*
-    | BLOB
+//    | CHARSET
+    | string
+//    // TODO can there be a space between CHARSET and STRING? if not, somehow move to lexer
+//    | STRING+
+//    | NATIONAL STRING*
+//    | BLOB
+//    | QUOTED+
     | ( '+' | '-' )? INTEGER
     | ( '+' | '-' )? FLOAT
     | SIZE
@@ -1909,12 +1919,16 @@ literal
     | PARAM
     | LOCAL
     | GLOBAL
+//    | 'INTERVAL' term timeUnitToo
+    | interval
+
     ;
 
 string
-    : CHARSET? STRING+
+    : ( CHARSET_STRING | STRING ) STRING*
     | NATIONAL STRING*
     | BLOB
+    | QUOTED+
     ;
 
 strings
@@ -2355,7 +2369,6 @@ keyword
       	| 'NODEGROUP'
       	| 'NONE'
       	| 'NOT'
-//      	| 'NOT2'
       	| 'NOW'
       	| 'NOWAIT'
       	| 'NTH_VALUE'
@@ -2508,6 +2521,7 @@ keyword
       	| 'S3'
       	| 'SAVEPOINT'
       	| 'SCHEDULE'
+      	| 'SCHEMA'
       	| 'SCHEMA_NAME'
       	| 'SECOND'
       	| 'SECOND_MICROSECOND'
@@ -2723,14 +2737,9 @@ FLOAT
 SIZE
     : DIGITS [KMGT] ;
 
-ID
-    : '"' ('\\'? .)*? '"'
-    | '`' ( ~'`' | '``' )* '`'
-    | [A-Z0-9$\u0080-\uFFFF] [A-Z0-9_$\u0080-\uFFFF]*
-    ;
-
-CHARSET
-  : '_' [A-Z0-9$\u0080-\uFFFF]+ ;
+// Sometimes a name, sometimes an ID, always a bummer
+QUOTED
+    : '"' ('\\'? .)*? '"' ;
 
 LOCAL
     : '@' ( ID | STRING | IPV4 | IPV6 ) ;
@@ -2738,11 +2747,21 @@ LOCAL
 GLOBAL
     : '@' '@' ( ID ( '.' ID )? )? ;
 
+CHARSET_STRING
+    : '_' [A-Z0-9$\u0080-\uFFFF]+ '\'' ('\\'? .)*? '\'' ;
+
 STRING
     : '\'' ('\\'? .)*? '\'' ;
 
 NATIONAL
     : 'N' STRING ;
+
+ID
+    : '`' ( ~'`' | '``' )* '`'
+    | [A-Z0-9_$\u0080-\uFFFF]+
+//    | [A-Z0-9$\u0080-\uFFFF] [A-Z0-9_$\u0080-\uFFFF]*
+    ;
+
 
 BLOB
     : 'x\'' BYTES '\''
@@ -2762,6 +2781,7 @@ POUND_COMMENT
 
 COMMENT
     : '--' ([ \t] ~[\n\r]* | [\n\r] | EOF) -> channel(HIDDEN)
+//    : '--' (~[\n\r]* | [\n\r] | EOF) -> channel(HIDDEN)
     ;
 
 WHITESPACE
