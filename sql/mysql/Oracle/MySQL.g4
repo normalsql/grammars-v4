@@ -93,16 +93,12 @@ statement
     | 'RENAME' ('TABLE' | 'TABLES') renamePair ( ',' renamePair )*
     | 'DROP' 'TEMPORARY'? ('TABLE' | 'TABLES') exists? qname (',' qname)* ( 'RESTRICT' | 'CASCADE' )?
 
-    | 'CREATE' 'TABLESPACE' name ('ADD' 'DATAFILE' string)? ( 'USE' 'LOGFILE' 'GROUP' name )? tablespaceOptions?
-    | 'ALTER' 'TABLESPACE' name ( ('ADD' | 'DROP') 'DATAFILE' string alterTablespaceOptions? | 'RENAME' 'TO' name | alterTablespaceOptions )
-    | 'DROP' 'TABLESPACE' name ( dropLogfileGroupOption (','? dropLogfileGroupOption)* )?
+    | 'CREATE' 'UNDO'? 'TABLESPACE' name tablespaceOptions?
+    | 'ALTER' 'UNDO'? 'TABLESPACE' name tablespaceOptions
+    | 'DROP' 'UNDO'? 'TABLESPACE' name tablespaceOptions?
 
     | 'CREATE' definer? 'TRIGGER' notExists? qname ( 'BEFORE' | 'AFTER' ) ('INSERT' | 'UPDATE' | 'DELETE') 'ON' qname 'FOR' 'EACH' 'ROW' (('FOLLOWS' | 'PRECEDES') name)? compoundStatement
     | 'DROP' 'TRIGGER' exists? qname
-
-    | 'CREATE' 'UNDO' 'TABLESPACE' name 'ADD' 'DATAFILE' string undoTableSpaceOptions?
-    | 'ALTER' 'UNDO' 'TABLESPACE' name 'SET' ( 'ACTIVE' | 'INACTIVE' ) undoTableSpaceOptions?
-    | 'DROP' 'UNDO' 'TABLESPACE' name undoTableSpaceOptions?
 
     | 'CREATE' 'USER' notExists? createUser (',' createUser)* ('DEFAULT' 'ROLE' roleList)? createUserTail
     | 'ALTER' 'USER' exists?  ( createUser (',' createUser)* | alterUser (',' alterUser)* ) createUserTail
@@ -274,15 +270,11 @@ alterLogfileGroupOptions
     : ('INITIAL_SIZE' '='? byteSize | 'STORAGE'? 'ENGINE' '='? name | ('WAIT' | 'NO_WAIT')) (','? ('INITIAL_SIZE' '='? byteSize | 'STORAGE'? 'ENGINE' '='? name | ('WAIT' | 'NO_WAIT')))* ;
 
 alterTableActions
-    : alterCommandList (partitionBy | removePartitioning)?
+    : (alterCommandsModifierList
+    | (alterCommandsModifierList ',')? (alterListItem | tableOption+) ( ',' ( alterListItem | alterCommandsModifier | tableOption+ ) )*) (partitionBy | removePartitioning)?
     | partitionBy
     | removePartitioning
     | (alterCommandsModifierList ',')? standaloneAlterCommands
-    ;
-
-alterCommandList
-    : alterCommandsModifierList
-    | (alterCommandsModifierList ',')? (alterListItem | tableOption+) ( ',' ( alterListItem | alterCommandsModifier | tableOption+ ) )*
     ;
 
 alterCommandsModifierList
@@ -314,6 +306,12 @@ alterCommandsModifier
     | 'LOCK' '='? name
     | ('WITH' | 'WITHOUT') 'VALIDATION'
     ;
+
+dropLogfileGroupOption
+    : ('WAIT' | 'NO_WAIT')
+    | 'STORAGE'? 'ENGINE' '='? name
+    ;
+
 
 alterListItem
     : 'ADD' 'COLUMN'? ( name fieldDefinition checkOrReferences? place? | '(' tableElementList ')' )
@@ -349,30 +347,12 @@ allOrPartitionNameList
     | name (',' name)*
     ;
 
-undoTableSpaceOptions
-    : 'STORAGE'? 'ENGINE' '='? name (','? 'STORAGE'? 'ENGINE' '='? name)*
-    ;
-
-alterTablespaceOptions
-    : alterTablespaceOption (','? alterTablespaceOption)*
-    ;
-
-alterTablespaceOption
-    : 'INITIAL_SIZE' '='? byteSize
-    | 'AUTOEXTEND_SIZE' '='? byteSize
-    | 'MAX_SIZE' '='? byteSize
-    | 'STORAGE'? 'ENGINE' '='? name
-    | ('WAIT' | 'NO_WAIT')
-    | 'ENCRYPTION' '='? string
-    | 'ENGINE' '='? string
-    ;
-
 viewCheckOption
     : 'WITH' ('CASCADED' | 'LOCAL')? 'CHECK' 'OPTION'
     ;
 
 createDatabaseOption
-    : 'DEFAULT'? ( 'CHAR' 'SET' | 'CHARACTER' 'SET' | 'CHARSET' ) '='? name
+    : 'DEFAULT'? charset '='? name
     | 'DEFAULT'? 'COLLATE' '='? name
     | 'DEFAULT'? 'ENCRYPTION' '='? string
     ;
@@ -424,8 +404,6 @@ indexOption
     | ('USING' | 'TYPE') indexType
     ;
 
-
-
 // TODO verify how this is used. there's overlap with
 indexNameAndType
     : name ( 'TYPE' indexType )?
@@ -452,20 +430,24 @@ serverOption
     ;
 
 tablespaceOptions
-    : tablespaceOption (','? tablespaceOption)*
+    : tablespaceOption ( ','? tablespaceOption )*
     ;
 
 tablespaceOption
-    : 'INITIAL_SIZE' '='? byteSize
-    | 'AUTOEXTEND_SIZE' '='? byteSize
-    | 'MAX_SIZE' '='? byteSize
+    : ('ADD' | 'DROP') 'DATAFILE' string
+    | 'USE' 'LOGFILE' 'GROUP' name
     | 'EXTENT_SIZE' '='? byteSize
-    | 'NODEGROUP' '='? INTEGER
-    | 'STORAGE'? 'ENGINE' '='? name
-    | ('WAIT' | 'NO_WAIT')
-    | 'COMMENT' '='? string
+    | 'INITIAL_SIZE' '='? byteSize
     | 'FILE_BLOCK_SIZE' '='? byteSize
+    | 'MAX_SIZE' '='? byteSize
+    | 'WAIT'
+    | 'RENAME' 'TO' name
+    | 'AUTOEXTEND_SIZE' '='? INTEGER
+    | 'SET' ('ACTIVE' | 'INACTIVE')
     | 'ENCRYPTION' '='? string
+    | 'ENGINE' '='? name
+    | 'NODEGROUP' '='? INTEGER
+    | 'COMMENT' '='? string
     ;
 
 viewAlgorithm
@@ -483,11 +465,6 @@ srsAttribute
     | 'DEFINITION' 'TEXT' string
     | 'ORGANIZATION' string 'IDENTIFIED' 'BY' INTEGER
     | 'DESCRIPTION' 'TEXT' string
-    ;
-
-dropLogfileGroupOption
-    : ('WAIT' | 'NO_WAIT')
-    | 'STORAGE'? 'ENGINE' '='? name
     ;
 
 renamePair
@@ -1093,14 +1070,13 @@ transactionCharacteristics
         ) (',' 'READ' ('WRITE' | 'ONLY'))?
     ;
 
-optionValueNoOptionType
-    : 'DEFAULT'? qname equal term
-    | charset
-//    | name equal expr
-//    | qname equal term
-    | 'NAMES' ( equal term | name collate? | 'DEFAULT' )
-    ;
-
+//optionValueNoOptionType
+//    : 'DEFAULT'? qname equal term
+//    | charset
+////    | name equal expr
+////    | qname equal term
+//    | 'NAMES' ( equal term | name collate? | 'DEFAULT' )
+//    ;
 
 inDb
     : ('FROM' | 'IN') name
@@ -1243,18 +1219,18 @@ interval
 compOp
     : '=' | '!=' | '<>' | '<=>' | '>=' | '>' | '<=' | '<' ;
 
-sumExpr
-    : 'AVG' '(' 'DISTINCT'? 'ALL'? term ')'
-    | ('BIT_AND' | 'BIT_OR' | 'BIT_XOR') '(' 'ALL'? term ')'
-    | 'JSON_ARRAYAGG' '(' 'ALL'? term ')'
-    | 'JSON_OBJECTAGG' '(' 'ALL'? term ',' 'ALL'? term ')'
-    | 'ST_COLLECT' '(' 'DISTINCT'? 'ALL'? term ')'
-    | 'COUNT' '(' ( 'ALL'? '*' | 'ALL'? term | 'DISTINCT' term (',' term)* ) ')'
-    | ('MIN' | 'MAX') '(' 'DISTINCT'? 'ALL'? term ')'
-    | ( 'STD' | 'VARIANCE' | 'STDDEV_SAMP' | 'VAR_SAMP' | 'SUM' ) '(' 'ALL'? term ')'
-    | 'SUM' '(' 'DISTINCT' 'ALL'? term ')'
-    | 'GROUP_CONCAT' '(' 'DISTINCT'? term (',' term)* orderBy? ( 'SEPARATOR' string )? ')'
-    ;
+//sumExpr
+//    : 'AVG' '(' 'DISTINCT'? 'ALL'? term ')'
+//    | ('BIT_AND' | 'BIT_OR' | 'BIT_XOR') '(' 'ALL'? term ')'
+//    | 'JSON_ARRAYAGG' '(' 'ALL'? term ')'
+//    | 'JSON_OBJECTAGG' '(' 'ALL'? term ',' 'ALL'? term ')'
+//    | 'ST_COLLECT' '(' 'DISTINCT'? 'ALL'? term ')'
+//    | 'COUNT' '(' ( 'ALL'? '*' | 'ALL'? term | 'DISTINCT' term (',' term)* ) ')'
+//    | ('MIN' | 'MAX') '(' 'DISTINCT'? 'ALL'? term ')'
+//    | ( 'STD' | 'VARIANCE' | 'STDDEV_SAMP' | 'VAR_SAMP' | 'SUM' ) '(' 'ALL'? term ')'
+//    | 'SUM' '(' 'DISTINCT' 'ALL'? term ')'
+//    | 'GROUP_CONCAT' '(' 'DISTINCT'? term (',' term)* orderBy? ( 'SEPARATOR' string )? ')'
+//    ;
 
 windowFunctionCall
     : ( 'ROW_NUMBER' | 'RANK' | 'DENSE_RANK' | 'CUME_DIST' | 'PERCENT_RANK' ) '(' ')' over
@@ -1697,7 +1673,7 @@ tableOption
     : 'AUTOEXTEND_SIZE' '='? byteSize
     | 'AUTO_INCREMENT' '='? INTEGER
     | 'AVG_ROW_LENGTH' '='? INTEGER
-    | 'DEFAULT'? ( 'CHAR' 'SET' | 'CHARACTER' 'SET' | 'CHARSET' ) '='? name
+    | 'DEFAULT'? charset '='? name
     | 'CHECKSUM' '='? INTEGER
     | 'DEFAULT'? 'COLLATE' '='? name
     | 'COMMENT' '='? string
