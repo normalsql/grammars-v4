@@ -140,7 +140,8 @@ statement
     | 'HANDLER' qname 'OPEN' tableAlias?
     | 'HANDLER' name ( 'CLOSE' | 'READ' handlerReadOrScan where? limit? )
     | insert
-    | loadStatement
+    | loadData
+    | loadXML
     | replace
     | select
     | updateStatement
@@ -479,7 +480,7 @@ handlerReadOrScan
 
 replace
     : 'REPLACE' ('LOW_PRIORITY' | 'DELAYED')?
-       'INTO'? qname usePartition?
+       'INTO'? qname partition?
        ( insertFromConstructor | 'SET' setter (',' setter)* | insertQueryExpression )
     ;
 
@@ -487,7 +488,7 @@ replace
 insert
     : 'INSERT' ('LOW_PRIORITY' | 'DELAYED' | 'HIGH_PRIORITY')?
       'IGNORE'?
-      'INTO'? qname usePartition?
+      'INTO'? qname partition?
       ( insertFromConstructor valuesReference? | 'SET' setter (',' setter)* valuesReference? | insertQueryExpression )
       ('ON' 'DUPLICATE' 'KEY' 'UPDATE' setter (',' setter)*)?
     ;
@@ -514,17 +515,64 @@ valuesReference
     : 'AS' name columns?
     ;
 
-loadStatement
-    : 'LOAD' ('DATA' | 'XML') ('LOW_PRIORITY' | 'CONCURRENT')?
+loadDataOld
+    : 'LOAD' 'DATA' ('LOW_PRIORITY' | 'CONCURRENT')?
       'FROM'? 'LOCAL'? ('INFILE' | ('URL' | 'S3'))? string ('COUNT' INTEGER | ID INTEGER)?
       ('IN' 'PRIMARY' 'KEY' 'ORDER')?
       ( 'REPLACE' | 'IGNORE' )?
-      'INTO' 'TABLE' qname usePartition? charset? ('ROWS' 'IDENTIFIED' 'BY' string)?
-      fieldsClause? linesClause?
+      'INTO' 'TABLE' qname partition? charset? ('ROWS' 'IDENTIFIED' 'BY' string)?
+      fields? lines?
       ('IGNORE' INTEGER ('LINES' | 'ROWS'))?
       ('(' (name ( ',' name )*)? ')')?
       ( 'SET' setter (',' setter)* )?
       ('PARALLEL' '=' INTEGER)? ('MEMORY' '=' byteSize)? ('ALGORITHM' '=' 'BULK')?
+    ;
+
+loadData
+    : 'LOAD' 'DATA' ('LOW_PRIORITY' | 'CONCURRENT')?
+      'LOCAL'? ('INFILE' | ('URL' | 'S3')) string
+      ( 'REPLACE' | 'IGNORE' )?
+      'INTO' 'TABLE' name
+      partition?
+      charset?
+//      ('ROWS' 'IDENTIFIED' 'BY' string)?
+      fields?
+      lines?
+      ( 'IGNORE' INTEGER ( 'LINES' | 'ROWS' ))?
+      ( '(' (name ( ',' name )* )? ')' )?
+      ( 'SET' setter (',' setter)* )?
+//      ('PARALLEL' '=' INTEGER)? ('MEMORY' '=' byteSize)? ('ALGORITHM' '=' 'BULK')?
+    ;
+
+
+loadXMLOld
+    : 'LOAD' 'XML' ('LOW_PRIORITY' | 'CONCURRENT')?
+      'FROM'? 'LOCAL'? ('INFILE' | ('URL' | 'S3'))? string ('COUNT' INTEGER | ID INTEGER)?
+      ('IN' 'PRIMARY' 'KEY' 'ORDER')?
+      ( 'REPLACE' | 'IGNORE' )?
+      'INTO' 'TABLE' qname partition? charset? ('ROWS' 'IDENTIFIED' 'BY' string)?
+      fields? lines?
+      ('IGNORE' INTEGER ('LINES' | 'ROWS'))?
+      ('(' (name ( ',' name )*)? ')')?
+      ( 'SET' setter (',' setter)* )?
+      ('PARALLEL' '=' INTEGER)? ('MEMORY' '=' byteSize)? ('ALGORITHM' '=' 'BULK')?
+    ;
+
+loadXML
+    : 'LOAD' 'XML' ('LOW_PRIORITY' | 'CONCURRENT')? 'LOCAL'?
+      ('INFILE' | ('URL' | 'S3'))? string
+//      ('COUNT' INTEGER | ID INTEGER)?
+//      ('IN' 'PRIMARY' 'KEY' 'ORDER')?
+      ( 'REPLACE' | 'IGNORE' )?
+      'INTO' 'TABLE' qname
+//      partition?
+      charset?
+      ('ROWS' 'IDENTIFIED' 'BY' string)?
+//      fields? lines?
+      ('IGNORE' INTEGER ('LINES' | 'ROWS'))?
+      ('(' (name ( ',' name )*)? ')')?
+      ( 'SET' setter (',' setter)* )?
+//      ('PARALLEL' '=' INTEGER)? ('MEMORY' '=' byteSize)? ('ALGORITHM' '=' 'BULK')?
     ;
 
 
@@ -563,7 +611,7 @@ limitCount
 
 into
     : 'INTO'
-        ( 'OUTFILE' string charset? fieldsClause? linesClause?
+        ( 'OUTFILE' string charset? fields? lines?
         | 'DUMPFILE' string
         | name ( ',' name )*
 //        | LOCAL ( ',' LOCAL )*
@@ -666,7 +714,7 @@ tables
     | tables (('INNER' | 'CROSS')? 'JOIN' | 'STRAIGHT_JOIN') tables ( 'ON' term | 'USING' '(' name (',' name)* ')' )?
     | tables ('LEFT' | 'RIGHT') 'OUTER'? 'JOIN' tables ( 'ON' term | 'USING' '(' name (',' name)* ')' )
     | tables ('NATURAL' 'INNER'? 'JOIN' | 'NATURAL' ('LEFT' | 'RIGHT') 'OUTER'? 'JOIN' ) tables
-    | qname usePartition? tableAlias? (indexHint (',' indexHint)*)? ('TABLESAMPLE' ('SYSTEM' | 'BERNOULLI') '(' literal ')')?
+    | qname partition? tableAlias? (indexHint (',' indexHint)*)? ('TABLESAMPLE' ('SYSTEM' | 'BERNOULLI') '(' literal ')')?
     | 'JSON_TABLE' '(' term ',' string jsonColumns ')' tableAlias?
     | 'LATERAL'? '(' select ')' tableAlias? columns?
     | '(' tables ')'
@@ -1746,19 +1794,17 @@ setVariable
     : setter ;
 
 
-fieldsClause
-    : ( 'COLUMNS' | 'FIELDS' ) fieldTerm+
+fields
+    : ( 'COLUMNS' | 'FIELDS' )
+      ( 'TERMINATED' 'BY' string )?
+      ( 'OPTIONALLY'? 'ENCLOSED' 'BY' string )?
+      ( 'ESCAPED' 'BY' string )?
     ;
 
-fieldTerm
-    : ( 'TERMINATED' | 'OPTIONALLY'? 'ENCLOSED' | 'ESCAPED' ) 'BY' string ;
-
-linesClause
-    : 'LINES' lineTerm+
-    ;
-
-lineTerm
-    : ('TERMINATED' | 'STARTING') 'BY' string
+lines
+    : 'LINES'
+      ( 'TERMINATED' 'BY' string )?
+      ( 'STARTING' 'BY' string )?
     ;
 
 createUser
@@ -1826,7 +1872,7 @@ noLogging
     | 'NO_WRITE_TO_BINLOG'
     ;
 
-usePartition
+partition
     : 'PARTITION' '(' name (',' name)* ')'
     ;
 
