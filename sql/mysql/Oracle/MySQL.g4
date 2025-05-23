@@ -1882,8 +1882,8 @@ columns
 
 qname
     :  '.'? name ( '.' name ( '.' name )? )?
-    | LOCAL '.' name
-    | GLOBAL '.' name
+    | LOCAL ( '.' name )?
+    | GLOBAL ( '.' name )?
     ;
 
 literal
