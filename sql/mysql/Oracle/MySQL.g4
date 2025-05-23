@@ -127,8 +127,6 @@ statement
     | 'ALTER' 'RELOAD' 'KEYRING'
     | 'ALTER' ('ENABLE' | 'DISABLE') name name
 
-
-
     | 'CREATE' orReplace? 'SPATIAL' 'REFERENCE' 'SYSTEM' notExists? INTEGER srsAttribute*
     | 'DROP' 'SPATIAL' 'REFERENCE' 'SYSTEM' exists? INTEGER
 
@@ -1765,7 +1763,7 @@ createUser
     ;
 
 identification
-    : 'IDENTIFIED' 'BY' string
+    : 'IDENTIFIED' 'BY' name
     | 'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD'
     | 'IDENTIFIED' 'WITH' name
     | 'IDENTIFIED' 'WITH' name 'AS' string
@@ -1801,8 +1799,9 @@ user
     ;
 
 userName
-//    : ( ID | string | keyword ) LOCAL?
-    : ( ID | STRING | QUOTED | keyword ) LOCAL?
+// TODO: remove or disable <SECRET>
+    : ( '<SECRET>' | ID | STRING | QUOTED | keyword )
+      LOCAL?
     ;
 
 like
@@ -1894,6 +1893,8 @@ name
     : ID
     | keyword
     | string
+// TODO: remove or disable <SECRET>
+    | '<SECRET>'
     ;
 
 byteSize
