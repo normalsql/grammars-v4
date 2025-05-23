@@ -2181,6 +2181,7 @@ keyword
     | 'INITIAL_SIZE'
     | 'INITIATE'
     | 'INNER'
+    | 'INNODB'
     | 'INOUT'
     | 'INSERT'
     | 'INSERT_METHOD'
