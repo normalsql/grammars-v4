@@ -265,7 +265,6 @@ statement
 //    | 'DELIMITER' .
     ;
 
-setVariable : ( scope? qname | LOCAL | GLOBAL ) equal term ;
 
 signalCondition
     : name
@@ -567,7 +566,7 @@ into
         ( 'OUTFILE' string charset? fieldsClause? linesClause?
         | 'DUMPFILE' string
         | name ( ',' name )*
-        | LOCAL ( ',' LOCAL )*
+//        | LOCAL ( ',' LOCAL )*
         )
     ;
 
@@ -1042,12 +1041,6 @@ repairType
     | 'EXTENDED'
     | 'USE_FRM'
     ;
-
-// TODO replace w/ setter
-installSetValue
-    : ('GLOBAL' | 'PERSIST') 'DEFAULT'? qname equal term
-    ;
-
 
 //transactionCharacteristics
 //    : 'READ' ('WRITE' | 'ONLY') ('ISOLATION' 'LEVEL'
@@ -1739,11 +1732,22 @@ schemaIdentifierPair
     ;
 
 setter
-    : qname '=' term
+    : scope? qname '=' term
     ;
 
+// TODO replace w/ setter
+installSetValue
+    : setter
+//    : ('GLOBAL' | 'PERSIST')? 'DEFAULT'? qname equal term
+    ;
+
+setVariable
+//  : ( scope? qname | LOCAL | GLOBAL ) equal term ;
+    : setter ;
+
+
 fieldsClause
-    : 'COLUMNS' fieldTerm+
+    : ( 'COLUMNS' | 'FIELDS' ) fieldTerm+
     ;
 
 fieldTerm
@@ -1831,20 +1835,14 @@ columns
     ;
 
 qname
-      // weird reverse construction for [[database.]table.]column
     :  '.'? name ( '.' name ( '.' name )? )?
-      // TODO would this way be better, worse?
-//      (( '.'? name '.' )? name '.' )? name
-    | LOCAL
-    | GLOBAL
+    | LOCAL '.' name
+    | GLOBAL '.' name
     ;
 
-//signedLiteral
-//    : literal
-//    | ( '+' | '-' )? INTEGER
-//    ;
-
 literal
+    // inlined the following (replacing 'name'), to shorten parse tree.
+    // may revert if this makes climbing tree harder.
 //    : name
     : ID
     | keyword
@@ -1861,11 +1859,10 @@ literal
     | datetime
     | null
     | PARAM
+    // TODO is this needed? mooted by rule qname?
     | LOCAL
     | GLOBAL
-//    | 'INTERVAL' term timeUnitToo
     | interval
-
     ;
 
 string
@@ -1881,8 +1878,6 @@ strings
 
 null
     : 'NULL' | NOPE ;
-
-
 
 datetime
     : ( 'DATE' | 'TIME' | 'TIMESTAMP' ) string ;
@@ -1904,9 +1899,7 @@ byteSize
     : INTEGER | SIZE ;
 
 equal
-    : '='
-    | ':='
-    ;
+    : '=' | ':=' ;
 
 scope
     : 'PERSIST'
