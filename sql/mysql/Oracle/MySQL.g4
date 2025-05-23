@@ -1215,7 +1215,7 @@ term
     | term ('<<' | '>>') term
     | term '&' term
     | term '|' term
-    | term ('=' | '!=' | '<>' | '<=>' | '>=' | '>' | '<=' | '<') term
+    | term ( '=' | ':=' | '!=' | '<>' | '<=>' | '>=' | '>' | '<=' | '<' ) term
 
     | function over?
     | windowFunctionCall
@@ -1780,7 +1780,7 @@ schemaIdentifierPair
     ;
 
 setter
-    : scope? qname '=' term
+    : scope? qname equal term
     ;
 
 // TODO replace w/ setter
