@@ -121,11 +121,14 @@ statement
     | 'ALTER' viewAlgorithm? definer? security? 'VIEW' qname columns? 'AS' select viewCheckOption?
     | 'DROP' 'VIEW' exists? qname (',' qname)* ('RESTRICT' | 'CASCADE')?
 
-    | 'ALTER' 'INSTANCE' 'ROTATE' name 'MASTER' 'KEY'
-
-    | 'ALTER' 'RELOAD' 'TLS' ( 'NO' 'ROLLBACK' 'ON' 'ERROR' | 'FOR' 'CHANNEL' name ( 'NO' 'ROLLBACK' 'ON' 'ERROR' )? )
-    | 'ALTER' 'RELOAD' 'KEYRING'
-    | 'ALTER' ('ENABLE' | 'DISABLE') name name
+    | 'ALTER' 'INSTANCE'
+        ( ( 'ENABLE' | 'DISABLE' ) 'INNODB' 'REDO_LOG'
+        | 'ROTATE' ( 'INNODB' | 'BINLOG') 'MASTER' 'KEY'
+        | 'RELOAD' 'TLS'
+            ( 'FOR' 'CHANNEL' ( 'mysql_main' | 'mysql_admin' ) )?
+            ( 'NO' 'ROLLBACK' 'ON' 'ERROR' )?
+        | 'RELOAD' 'KEYRING'
+        )
 
     | 'CREATE' orReplace? 'SPATIAL' 'REFERENCE' 'SYSTEM' notExists? INTEGER srsAttribute*
     | 'DROP' 'SPATIAL' 'REFERENCE' 'SYSTEM' exists? INTEGER
@@ -172,7 +175,7 @@ statement
 
     | 'CLONE' 'LOCAL' 'DATA' 'DIRECTORY' equal? string
     | 'CLONE' 'REMOTE' ('FOR' 'REPLICATION')?
-    | 'CLONE' 'INSTANCE' 'FROM' user ':' INTEGER 'IDENTIFIED' 'BY' string (ssl | 'DATA' 'DIRECTORY' equal? string ssl?)?
+    | 'CLONE' 'INSTANCE' 'FROM' user ':' INTEGER 'IDENTIFIED' 'BY' name (ssl | 'DATA' 'DIRECTORY' equal? string ssl?)?
 
     | grantStatement
     | revokeStatement
