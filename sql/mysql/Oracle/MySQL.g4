@@ -145,7 +145,7 @@ statement
     | replace
     | select
     | updateStatement
-    | 'START' 'TRANSACTION' ('WITH' 'CONSISTENT' 'SNAPSHOT' | 'READ' ('WRITE' | 'ONLY') )*
+    | 'START' 'TRANSACTION' ('WITH' 'CONSISTENT' 'SNAPSHOT' | accessMode )*
     | 'COMMIT' 'WORK'? ('AND' 'NO'? 'CHAIN')? ( 'NO'? 'RELEASE' )?
     | 'SAVEPOINT' name
     | 'ROLLBACK' 'WORK'? ( 'TO' 'SAVEPOINT'? name | ('AND' 'NO'? 'CHAIN')? ('NO'? 'RELEASE')? )
@@ -164,7 +164,7 @@ statement
     | 'PURGE' ('BINARY' | 'MASTER') 'LOGS' ( 'TO' string | 'BEFORE' term )
     | 'CHANGE' ('MASTER' | 'REPLICATION' 'SOURCE') 'TO' sourceDefinitions channel?
     | 'RESET' resetOption (',' resetOption)*
-    | 'RESET' 'PERSIST' (exists 'DEFAULT'? qname)?
+    | 'RESET' 'PERSIST' ( exists? qname )?
     | 'START' replica replicaThreadOptions? ('UNTIL' replicaUntil)? userOption? passwordOption? defaultAuthOption? pluginDirOption? channel?
     | 'STOP' replica replicaThreadOptions? channel?
     | 'CHANGE' 'REPLICATION' 'FILTER' filterDefinition ( ',' filterDefinition )* channel?
@@ -194,7 +194,7 @@ statement
 //    | 'SET' scope? qname equal term (',' scope? qname equal term )*
     | 'SET' setVariable (',' setVariable )*
     | 'SET' 'NAMES' ( equal term | name collate? | 'DEFAULT' )
-//    | 'SET' scope? 'TRANSACTION' transactionCharacteristics
+    | 'SET' ('GLOBAL' | 'SESSION')? 'TRANSACTION' transactionCharacteristics ( ',' transactionCharacteristics )*
 //    | 'SET' scope? 'DEFAULT'? qname equal term (',' (scope 'DEFAULT'? qname equal term | optionValueNoOptionType))*
 //    | 'SET' 'PASSWORD' ('FOR' user)? equal ( string replacePassword? retainCurrentPassword? | 'PASSWORD' '(' string ')' )
 //    | 'SET' 'PASSWORD' ('FOR' user)? 'TO' 'RANDOM' replacePassword? retainCurrentPassword?
@@ -211,10 +211,10 @@ statement
     | 'SHOW' 'OPEN' 'TABLES' inDb? like?
     | 'SHOW' 'PARSE_TREE' statement
     | 'SHOW' 'PLUGINS'
-    | 'SHOW' 'ENGINE' name ('LOGS' | 'MUTEX' | 'STATUS')
-    | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? 'COLUMNS' ('FROM' | 'IN') qname inDb? like?
     | 'SHOW' ('BINARY' | 'MASTER') 'LOGS'
     | 'SHOW' 'BINARY' 'LOG' 'STATUS'
+    | 'SHOW' 'ENGINE' name ('LOGS' | 'MUTEX' | 'STATUS')
+    | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? ('COLUMNS' | 'FIELDS' ) ('FROM' | 'IN') qname inDb? like?
     | 'SHOW' (replica 'HOSTS' | 'REPLICAS')
     | 'SHOW' 'BINLOG' 'EVENTS' ('IN' string)? ( 'FROM' INTEGER )? limit? channel?
     | 'SHOW' 'RELAYLOG' 'EVENTS' ('IN' string)? ( 'FROM' INTEGER )? limit? channel?
@@ -532,7 +532,7 @@ loadData
     : 'LOAD' 'DATA' ('LOW_PRIORITY' | 'CONCURRENT')?
       'LOCAL'? ('INFILE' | ('URL' | 'S3')) string
       ( 'REPLACE' | 'IGNORE' )?
-      'INTO' 'TABLE' name
+      'INTO' 'TABLE' qname
       partition?
       charset?
 //      ('ROWS' 'IDENTIFIED' 'BY' string)?
@@ -614,7 +614,7 @@ into
         ( 'OUTFILE' string charset? fields? lines?
         | 'DUMPFILE' string
         | name ( ',' name )*
-//        | LOCAL ( ',' LOCAL )*
+        | LOCAL ( ',' LOCAL )*
         )
     ;
 
@@ -1090,18 +1090,17 @@ repairType
     | 'USE_FRM'
     ;
 
-//transactionCharacteristics
-//    : 'READ' ('WRITE' | 'ONLY') ('ISOLATION' 'LEVEL'
-//        ( 'REPEATABLE' 'READ'
-//        | 'READ' ('COMMITTED' | 'UNCOMMITTED')
-//        | 'SERIALIZABLE'
-//        ))?
-//    | 'ISOLATION' 'LEVEL'
-//        ( 'REPEATABLE' 'READ'
-//        | 'READ' ('COMMITTED' | 'UNCOMMITTED')
-//        | 'SERIALIZABLE'
-//        ) (',' 'READ' ('WRITE' | 'ONLY'))?
-//    ;
+transactionCharacteristics
+    : 'ISOLATION' 'LEVEL'
+        ( 'REPEATABLE' 'READ'
+        | 'READ' ('COMMITTED' | 'UNCOMMITTED')
+        | 'SERIALIZABLE'
+        )
+    | accessMode
+    ;
+
+accessMode
+    : 'READ' ('WRITE' | 'ONLY') ;
 
 //optionValueNoOptionType
 //    : 'DEFAULT'? qname equal term
