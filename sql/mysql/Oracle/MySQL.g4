@@ -1779,7 +1779,7 @@ schemaIdentifierPair
     ;
 
 setter
-    : scope? qname equal term
+    : scope? qname equal? term
     ;
 
 // TODO replace w/ setter
@@ -1880,9 +1880,10 @@ columns
     ;
 
 qname
-    :  '.'? name ( '.' name ( '.' name )? )?
-    | LOCAL ( '.' name )?
-    | GLOBAL ( '.' name )?
+    : ('.'? name| LOCAL| GLOBAL)?  ( '.' name ( '.' name )? )?
+//    : '.'? name ( '.' name ( '.' name )? )?
+//    | LOCAL ( '.' name )?
+//    | GLOBAL ( '.' name )?
     ;
 
 literal
