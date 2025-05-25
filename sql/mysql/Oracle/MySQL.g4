@@ -315,7 +315,7 @@ alterTableAction
     | 'COALESCE' 'PARTITION' noLogging? INTEGER
     | 'TRUNCATE' 'PARTITION' allOrPartitionNameList
     | 'REORGANIZE' 'PARTITION' noLogging? ( name (',' name)* 'INTO' '(' partitionDef (',' partitionDef)* ')' )?
-    | 'EXCHANGE' 'PARTITION' name 'WITH' 'TABLE' qname ('WITH' | 'WITHOUT') 'VALIDATION'?
+    | 'EXCHANGE' 'PARTITION' name 'WITH' 'TABLE' qname (('WITH' | 'WITHOUT') 'VALIDATION')?
     | 'DISCARD' 'PARTITION' allOrPartitionNameList 'TABLESPACE'
     | 'IMPORT' 'PARTITION' allOrPartitionNameList 'TABLESPACE'
     | 'SECONDARY_LOAD'
