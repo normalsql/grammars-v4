@@ -105,7 +105,8 @@ statement
     | 'CREATE' definer? 'TRIGGER' notExists? qname ( 'BEFORE' | 'AFTER' ) ('INSERT' | 'UPDATE' | 'DELETE') 'ON' qname 'FOR' 'EACH' 'ROW' (('FOLLOWS' | 'PRECEDES') name)? compoundStatement
     | 'DROP' 'TRIGGER' exists? qname
 
-    | 'CREATE' 'USER' notExists? createUser (',' createUser)* ('DEFAULT' 'ROLE' roleList)? createUserTail
+    | 'CREATE' 'USER' notExists? createUser (',' createUser)*
+    //  ('DEFAULT' 'ROLE' roleList)? createUserTail
     | 'ALTER' 'USER' exists?  ( createUser (',' createUser)* | alterUser (',' alterUser)* ) createUserTail
     | 'ALTER' 'USER' exists?  userFunction
         ( ('IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' | 'IDENTIFIED' 'BY' string) replacePassword? retainCurrentPassword?
@@ -946,7 +947,26 @@ userFunction
     ;
 
 createUserTail
-    : requireClause? connectOptions? accountLockPasswordExpireOptions* ('ATTRIBUTE' string | 'COMMENT' string)?
+    : requireClause?
+        ('WITH'
+          ( 'MAX_QUERIES_PER_HOUR' INTEGER
+          | 'MAX_UPDATES_PER_HOUR' INTEGER
+          | 'MAX_CONNECTIONS_PER_HOUR' INTEGER
+          | 'MAX_USER_CONNECTIONS' INTEGER
+          )*
+          ('ACCOUNT' ('LOCK' | 'UNLOCK')
+          | 'PASSWORD'
+          ( 'EXPIRE' ( 'INTERVAL' INTEGER 'DAY' | 'NEVER' | 'DEFAULT' )?
+          | 'HISTORY' (INTEGER | 'DEFAULT')
+          | 'REUSE' 'INTERVAL' ( INTEGER 'DAY' | 'DEFAULT' )
+          | 'REQUIRE' 'CURRENT' ( 'DEFAULT' | 'OPTIONAL' )?
+          )
+          | 'FAILED_LOGIN_ATTEMPTS' INTEGER
+          | 'PASSWORD_LOCK_TIME'
+          )
+          (INTEGER | 'UNBOUNDED')
+        )*
+        ('COMMENT' string | 'ATTRIBUTE' string )*
     ;
 
 requireClause
@@ -954,31 +974,6 @@ requireClause
         ( requireListElement ('AND'? requireListElement)*
         | ('SSL' | 'X509' | 'NONE')
         )
-    ;
-
-connectOptions
-    : 'WITH'
-        ( 'MAX_QUERIES_PER_HOUR' INTEGER
-        | 'MAX_UPDATES_PER_HOUR' INTEGER
-        | 'MAX_CONNECTIONS_PER_HOUR' INTEGER
-        | 'MAX_USER_CONNECTIONS' INTEGER
-    )+
-    ;
-
-accountLockPasswordExpireOptions
-    : 'ACCOUNT' ('LOCK' | 'UNLOCK')
-    | 'PASSWORD'
-        ( 'EXPIRE'
-            ( 'INTERVAL' INTEGER 'DAY'
-            | 'NEVER'
-            | 'DEFAULT'
-            )?
-        | 'HISTORY' (INTEGER | 'DEFAULT')
-        | 'REUSE' 'INTERVAL' ( INTEGER 'DAY' | 'DEFAULT' )
-        | 'REQUIRE' 'CURRENT' ( 'DEFAULT' | 'OPTIONAL' )?
-        )
-    | 'FAILED_LOGIN_ATTEMPTS' INTEGER
-    | 'PASSWORD_LOCK_TIME' (INTEGER | 'UNBOUNDED')
     ;
 
 grantStatement
@@ -1807,20 +1802,19 @@ lines
     ;
 
 createUser
-    : user
-        ( identification ('AND' identification ('AND' identification)?)?
-        | 'IDENTIFIED' 'WITH' name ('INITIAL' 'AUTHENTICATION' ( 'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' | 'IDENTIFIED' 'WITH' name 'AS' string | 'IDENTIFIED' 'BY' string ))?
-        | 'AND' identification ('AND' identification)?
-        )?
+    : user ( authOption ('AND' authOption ('AND' authOption)? )? )?
     ;
+
+authOption
+    : identification ;
 
 identification
     : 'IDENTIFIED' 'BY' name
     | 'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD'
     | 'IDENTIFIED' 'WITH' name
-    | 'IDENTIFIED' 'WITH' name 'AS' string
-    | 'IDENTIFIED' 'WITH' name 'BY' string
+    | 'IDENTIFIED' 'WITH' name 'BY' name
     | 'IDENTIFIED' 'WITH' name 'BY' 'RANDOM' 'PASSWORD'
+    | 'IDENTIFIED' 'WITH' name 'AS' name
     ;
 
 retainCurrentPassword
