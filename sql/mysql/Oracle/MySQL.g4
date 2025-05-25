@@ -708,9 +708,6 @@ tableReferenceList
     ;
 
 tables
-//      // ODBC syntax
-//      | '{' ( name | 'OJ' ) tableFactor joinedTable* '}'
-
     : tables ',' tables
     | tables (('INNER' | 'CROSS')? 'JOIN' | 'STRAIGHT_JOIN') tables ( 'ON' term | 'USING' '(' name (',' name)* ')' )?
     | tables ('LEFT' | 'RIGHT') 'OUTER'? 'JOIN' tables ( 'ON' term | 'USING' '(' name (',' name)* ')' )
@@ -718,6 +715,7 @@ tables
     | qname partition? tableAlias? (indexHint (',' indexHint)*)? ('TABLESAMPLE' ('SYSTEM' | 'BERNOULLI') '(' literal ')')?
     | 'JSON_TABLE' '(' term ',' string jsonColumns ')' tableAlias?
     | 'LATERAL'? '(' select ')' tableAlias? columns?
+    | '{' 'OJ' tables '}'
     | '(' tables ')'
     ;
 
