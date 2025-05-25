@@ -49,20 +49,20 @@ options {
 }
 
 statements
-    : statement? ( (';') statement? )* EOF ;
+    : statement? ( ';' statement? )* EOF ;
 
 // TODO: inlining all the statements for now. will re-refactor as needed.
 
 statement
     : 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? name databaseOption*
-    | 'ALTER' ( 'DATABASE' | 'SCHEMA' ) name databaseOption+
-    | 'DROP' ( 'DATABASE' | 'SCHEMA' ) exists? name
+    | 'ALTER' ( 'DATABASE' | 'SCHEMA' ) qname databaseOption+
+    | 'DROP' ( 'DATABASE' | 'SCHEMA' ) exists? qname
 
     | 'CREATE' definer? 'EVENT' notExists? qname 'ON' 'SCHEDULE' schedule ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ('ENABLE' | 'DISABLE' ('ON' replica)?)? ( 'COMMENT' string )? 'DO' compoundStatement
-    | 'ALTER' definer? 'EVENT' qname ('ON' 'SCHEDULE' schedule)? ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ('RENAME' 'TO' name)? ( 'ENABLE' | 'DISABLE' ('ON' replica)? )? ('COMMENT' string)? ('DO' compoundStatement)?
+    | 'ALTER' definer? 'EVENT' qname ('ON' 'SCHEDULE' schedule)? ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ('RENAME' 'TO' qname)? ( 'ENABLE' | 'DISABLE' ('ON' replica)? )? ('COMMENT' string)? ('DO' compoundStatement)?
     | 'DROP' 'EVENT' exists? qname
 
-    | 'CREATE' 'AGGREGATE'? 'FUNCTION' notExists? name 'RETURNS' ( 'STRING' | 'INT' | 'REAL' | 'DECIMAL' ) 'SONAME' string
+    | 'CREATE' 'AGGREGATE'? 'FUNCTION' notExists? qname 'RETURNS' ( 'STRING' | 'INT' | 'REAL' | 'DECIMAL' ) 'SONAME' string
     | 'CREATE' definer? 'FUNCTION' notExists? qname '(' ( functionParameter (',' functionParameter)* )? ')' 'RETURNS' dataType collate? routineCreateOption* storedRoutineBody
     | 'ALTER' 'FUNCTION' qname routineCreateOption*
     | 'DROP' 'FUNCTION' exists? qname
@@ -70,23 +70,23 @@ statement
     | 'ALTER' 'PROCEDURE' qname routineCreateOption*
     | 'DROP' 'PROCEDURE' exists? qname
 
-    | 'CREATE' ( 'UNIQUE' | 'FULLTEXT' | 'SPATIAL')? 'INDEX' name ('USING' ('BTREE' | 'HASH'))? 'ON' qname '(' keyPart (',' keyPart)* ')' createIndexOption*
-    | 'DROP' onlineOption? 'INDEX' qname 'ON' qname ('ALGORITHM' '='? name | 'LOCK' '='? name)*
+    | 'CREATE' ( 'UNIQUE' | 'FULLTEXT' | 'SPATIAL')? 'INDEX' qname ('USING' ('BTREE' | 'HASH'))? 'ON' qname '(' keyPart (',' keyPart)* ')' createIndexOption*
+    | 'DROP' onlineOption? 'INDEX' qname 'ON' qname ('ALGORITHM' '='? qname | 'LOCK' '='? qname)*
 
-    | 'ALTER' 'LOGFILE' 'GROUP' name 'ADD' 'UNDOFILE' string alterLogfileGroupOptions?
-    | 'CREATE' 'LOGFILE' 'GROUP' name 'ADD' 'UNDOFILE' string (logfileGroupOption (','? logfileGroupOption)*)?
-    | 'DROP' 'LOGFILE' 'GROUP' name ( dropLogfileGroupOption (','? dropLogfileGroupOption)* )?
+    | 'ALTER' 'LOGFILE' 'GROUP' qname 'ADD' 'UNDOFILE' string alterLogfileGroupOptions?
+    | 'CREATE' 'LOGFILE' 'GROUP' qname 'ADD' 'UNDOFILE' string (logfileGroupOption (','? logfileGroupOption)*)?
+    | 'DROP' 'LOGFILE' 'GROUP' qname ( dropLogfileGroupOption (','? dropLogfileGroupOption)* )?
 
-    | 'CREATE' 'RESOURCE' 'GROUP' name 'TYPE' equal? ( 'USER' | 'SYSTEM' ) resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable?
-    | 'ALTER' 'RESOURCE' 'GROUP' name resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable? 'FORCE'?
-    | 'SET' 'RESOURCE' 'GROUP' name ('FOR' INTEGER (','? INTEGER)*)?
-    | 'DROP' 'RESOURCE' 'GROUP' name 'FORCE'?
+    | 'CREATE' 'RESOURCE' 'GROUP' qname 'TYPE' equal? ( 'USER' | 'SYSTEM' ) resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable?
+    | 'ALTER' 'RESOURCE' 'GROUP' qname resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable? 'FORCE'?
+    | 'SET' 'RESOURCE' 'GROUP' qname ('FOR' INTEGER (','? INTEGER)*)?
+    | 'DROP' 'RESOURCE' 'GROUP' qname 'FORCE'?
 
     | 'CREATE' 'ROLE' notExists? roleList
     | 'DROP' 'ROLE' exists? roleList
 
-    | 'CREATE' 'SERVER' name 'FOREIGN' 'DATA' 'WRAPPER' name 'OPTIONS' '(' serverOption (',' serverOption)* ')'
-    | 'ALTER' 'SERVER' name 'OPTIONS' '(' serverOption (',' serverOption)* ')'
+    | 'CREATE' 'SERVER' qname 'FOREIGN' 'DATA' 'WRAPPER' qname 'OPTIONS' '(' serverOption (',' serverOption)* ')'
+    | 'ALTER' 'SERVER' qname 'OPTIONS' '(' serverOption (',' serverOption)* ')'
     | 'DROP' 'SERVER' exists? name
 
 
@@ -98,11 +98,11 @@ statement
     | 'RENAME' ('TABLE' | 'TABLES') renamePair ( ',' renamePair )*
     | 'DROP' 'TEMPORARY'? ('TABLE' | 'TABLES') exists? qname (',' qname)* ( 'RESTRICT' | 'CASCADE' )?
 
-    | 'CREATE' 'UNDO'? 'TABLESPACE' name tablespaceOptions?
-    | 'ALTER' 'UNDO'? 'TABLESPACE' name tablespaceOptions
-    | 'DROP' 'UNDO'? 'TABLESPACE' name tablespaceOptions?
+    | 'CREATE' 'UNDO'? 'TABLESPACE' qname tablespaceOptions?
+    | 'ALTER' 'UNDO'? 'TABLESPACE' qname tablespaceOptions
+    | 'DROP' 'UNDO'? 'TABLESPACE' qname tablespaceOptions?
 
-    | 'CREATE' definer? 'TRIGGER' notExists? qname ( 'BEFORE' | 'AFTER' ) ('INSERT' | 'UPDATE' | 'DELETE') 'ON' qname 'FOR' 'EACH' 'ROW' (('FOLLOWS' | 'PRECEDES') name)? compoundStatement
+    | 'CREATE' definer? 'TRIGGER' notExists? qname ( 'BEFORE' | 'AFTER' ) ('INSERT' | 'UPDATE' | 'DELETE') 'ON' qname 'FOR' 'EACH' 'ROW' (('FOLLOWS' | 'PRECEDES') qname)? compoundStatement
     | 'DROP' 'TRIGGER' exists? qname
 
     | 'CREATE' 'USER' notExists? createUser (',' createUser)*
@@ -139,7 +139,7 @@ statement
     | delete
     | 'DO' item (',' item)*
     | 'HANDLER' qname 'OPEN' tableAlias?
-    | 'HANDLER' name ( 'CLOSE' | 'READ' handlerReadOrScan where? limit? )
+    | 'HANDLER' qname ( 'CLOSE' | 'READ' handlerReadOrScan where? limit? )
     | insert
     | loadData
     | loadXML
@@ -148,9 +148,9 @@ statement
     | updateStatement
     | 'START' 'TRANSACTION' ('WITH' 'CONSISTENT' 'SNAPSHOT' | accessMode )*
     | 'COMMIT' 'WORK'? ('AND' 'NO'? 'CHAIN')? ( 'NO'? 'RELEASE' )?
-    | 'SAVEPOINT' name
+    | 'SAVEPOINT' qname
     | 'ROLLBACK' 'WORK'? ( 'TO' 'SAVEPOINT'? name | ('AND' 'NO'? 'CHAIN')? ('NO'? 'RELEASE')? )
-    | 'RELEASE' 'SAVEPOINT' name
+    | 'RELEASE' 'SAVEPOINT' qname
     | 'LOCK' ('TABLES' | 'TABLE') lockItem (',' lockItem)*
     | 'LOCK' 'INSTANCE' 'FOR' 'BACKUP'
     | 'UNLOCK' ( 'TABLES' | 'TABLE' | 'INSTANCE')
@@ -171,8 +171,8 @@ statement
     | 'CHANGE' 'REPLICATION' 'FILTER' filterDefinition ( ',' filterDefinition )* channel?
 //    | 'LOAD' ('DATA' | 'TABLE' qname) 'FROM' 'MASTER'
     | ('START' groupReplicationStartOptions? | 'STOP') 'GROUP_REPLICATION'
-    | 'PREPARE' name 'FROM' (string | name)
-    | 'EXECUTE' name ('USING' qname ( ',' qname )*)?
+    | 'PREPARE' qname 'FROM' qname
+    | 'EXECUTE' qname ('USING' qname ( ',' qname )*)?
     | ('DEALLOCATE' | 'DROP') 'PREPARE' name
 
     | 'CLONE' 'LOCAL' 'DATA' 'DIRECTORY' equal? string
@@ -194,7 +194,7 @@ statement
 //    | 'SET' optionValueNoOptionType (',' (scope 'DEFAULT'? qname equal term | optionValueNoOptionType))*
 //    | 'SET' scope? qname equal term (',' scope? qname equal term )*
     | 'SET' setVariable (',' setVariable )*
-    | 'SET' 'NAMES' ( equal term | name collate? | 'DEFAULT' )
+    | 'SET' 'NAMES' ( equal term | qname collate? | 'DEFAULT' )
     | 'SET' ('GLOBAL' | 'SESSION')? 'TRANSACTION' transactionCharacteristics ( ',' transactionCharacteristics )*
 //    | 'SET' scope? 'DEFAULT'? qname equal term (',' (scope 'DEFAULT'? qname equal term | optionValueNoOptionType))*
 //    | 'SET' 'PASSWORD' ('FOR' user)? equal ( string replacePassword? retainCurrentPassword? | 'PASSWORD' '(' string ')' )
@@ -214,7 +214,7 @@ statement
     | 'SHOW' 'PLUGINS'
     | 'SHOW' ('BINARY' | 'MASTER') 'LOGS'
     | 'SHOW' 'BINARY' 'LOG' 'STATUS'
-    | 'SHOW' 'ENGINE' name ('LOGS' | 'MUTEX' | 'STATUS')
+    | 'SHOW' 'ENGINE' qname ('LOGS' | 'MUTEX' | 'STATUS')
     | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? ('COLUMNS' | 'FIELDS' ) ('FROM' | 'IN') qname inDb? like?
     | 'SHOW' (replica 'HOSTS' | 'REPLICAS')
     | 'SHOW' 'BINLOG' 'EVENTS' ('IN' string)? ( 'FROM' INTEGER )? limit? channel?
@@ -232,7 +232,7 @@ statement
     | 'SHOW' 'COLLATION' like?
     | 'SHOW' 'PRIVILEGES'
     | 'SHOW' 'GRANTS' ('FOR' user ('USING' user (',' user)*)?)?
-    | 'SHOW' 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? name
+    | 'SHOW' 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? qname
     | 'SHOW' 'CREATE' 'TABLE' qname
     | 'SHOW' 'CREATE' 'VIEW' qname
     | 'SHOW' 'MASTER' 'STATUS'
@@ -248,7 +248,7 @@ statement
     | 'SHOW' 'CREATE' 'USER' user
 
     | 'BINLOG' string
-    | 'CACHE' 'INDEX' keyCacheListOrParts 'IN' name
+    | 'CACHE' 'INDEX' keyCacheListOrParts 'IN' qname
     | 'FLUSH' noLogging? ( flushTables | flushOption (',' flushOption)* )
     | 'KILL' ('CONNECTION' | 'QUERY')? term
     | 'LOAD' 'INDEX' 'INTO' 'CACHE' preloadTail
@@ -571,7 +571,7 @@ loadXML
       ('ROWS' 'IDENTIFIED' 'BY' string)?
 //      fields? lines?
       ('IGNORE' INTEGER ('LINES' | 'ROWS'))?
-      ('(' (name ( ',' name )*)? ')')?
+      ('(' (qname ( ',' qname )*)? ')')?
       ( 'SET' setter (',' setter)* )?
 //      ('PARALLEL' '=' INTEGER)? ('MEMORY' '=' byteSize)? ('ALGORITHM' '=' 'BULK')?
     ;
@@ -776,7 +776,7 @@ updateStatement
     : with? 'UPDATE' 'LOW_PRIORITY'? 'IGNORE'? tableReferenceList
       'SET' setter (',' setter)*
       where?
-        orderBy? limitCount?
+      orderBy? limitCount?
     ;
 
 beginWork
@@ -2749,20 +2749,24 @@ BLOB
     | 'b\'' [01]+ '\''
     ;
 
+// Weird MySQL-ism synonym for NULL. A separate token from 'NULL'
+// because I'm not clear where its permitted.
 NOPE options { caseInsensitive = false; }
     : '\\N' ;
 
+// Allows nested block comments. Useful, but probably incorrect.
 BLOCK_COMMENT
-    : '/*' .*? '*/' -> channel(HIDDEN)
-    ;
+    : '/*' ( BLOCK_COMMENT | ~[*/] | '*' ~'/' )* '*/' -> channel(HIDDEN);
 
+// Another MySQL-ism...?
 POUND_COMMENT
-    : '#' ~[\n\r]* -> channel(HIDDEN)
-    ;
+    : '#' ~[\n\r]* -> channel(HIDDEN) ;
 
 COMMENT
-//    : '--' ([ \t] ~[\n\r]* | [\n\r] | EOF) -> channel(HIDDEN)
-    : '--' (~[\n\r]* | [\n\r] | EOF) -> channel(HIDDEN)
+    // MySQL requires whitespace before content
+    : '--' ( [ \t] ~[\n\r]* | [\n\r] | EOF ) -> channel(HIDDEN)
+    // Playing around with variations, to see which I prefer.
+//    : '--' ( [ \t] .*? )? ( [\n\r] | EOF ) -> channel(HIDDEN)
     ;
 
 WHITESPACE
