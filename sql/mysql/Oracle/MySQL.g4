@@ -205,9 +205,9 @@ statement
 
 
     | 'SHOW' 'DATABASES' like?
-    | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? 'TABLES' inDb? like?
-    | 'SHOW' 'FULL'? 'TRIGGERS' inDb? like?
     | 'SHOW' 'EVENTS' inDb? like?
+    | 'SHOW' 'FULL'? 'TRIGGERS' inDb? like?
+    | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? 'TABLES' inDb? like?
     | 'SHOW' 'TABLE' 'STATUS' inDb? like?
     | 'SHOW' 'OPEN' 'TABLES' inDb? like?
     | 'SHOW' 'PARSE_TREE' statement
@@ -240,8 +240,8 @@ statement
     | 'SHOW' 'CREATE' 'PROCEDURE' qname
     | 'SHOW' 'CREATE' 'FUNCTION' qname
     | 'SHOW' 'CREATE' 'TRIGGER' qname
-    | 'SHOW' 'CREATE' 'PROCEDURE' 'STATUS' like?
-    | 'SHOW' 'CREATE' 'FUNCTION' 'STATUS' like?
+    | 'SHOW' 'PROCEDURE' 'STATUS' like?
+    | 'SHOW' 'FUNCTION' 'STATUS' like?
     | 'SHOW' 'CREATE' 'PROCEDURE' 'CODE' qname
     | 'SHOW' 'CREATE' 'FUNCTION' 'CODE' qname
     | 'SHOW' 'CREATE' 'EVENT' qname
@@ -255,7 +255,7 @@ statement
     | 'SHUTDOWN'
 
     | ('EXPLAIN' | 'DESCRIBE' | 'DESC') qname ( string | qname )?
-    | ('EXPLAIN' | 'DESCRIBE' | 'DESC') explainOptions? ( 'FOR' 'DATABASE' name )? explainableStatement
+    | ('EXPLAIN' | 'DESCRIBE' | 'DESC') explainOption? ( 'FOR' 'DATABASE' name )? explainableStatement
     | 'HELP' name
     | 'USE' name
     | 'RESTART'
@@ -1171,11 +1171,11 @@ resourceGroupEnableDisable
     | 'DISABLE'
     ;
 
-explainOptions
-    : 'FORMAT' '=' name ( 'INTO' '@' name )?
+explainOption
+    : 'FORMAT' '=' qname ( 'INTO' qname )?
     | 'EXTENDED'
     | 'ANALYZE'
-    | 'ANALYZE' 'FORMAT' '=' name
+    | 'ANALYZE' 'FORMAT' '=' qname
     ;
 
 explainableStatement
@@ -1222,7 +1222,7 @@ term
     | term 'NOT'? 'LIKE' term ('ESCAPE' term)?
     | term 'NOT'? ( 'REGEXP' | 'RLIKE' ) term
     | term 'NOT'? 'IN' ('(' select ')' | terms )
-    | term 'MEMBER' 'OF'? '(' literal ')'
+    | term 'MEMBER' 'OF'? '(' term ')'
     | term 'NOT'? 'BETWEEN' term 'AND' term
     | 'CASE' term? ('WHEN' term 'THEN' term)+ ('ELSE' term)? 'END'
     | term 'SOUNDS' 'LIKE' term
@@ -1872,7 +1872,7 @@ columns
     ;
 
 qname
-    : ('.'? name| LOCAL| GLOBAL)?  ( '.' name ( '.' name )? )?
+    : ('.'? name| LOCAL| GLOBAL)  ( '.' name ( '.' name )? )?
 //    : '.'? name ( '.' name ( '.' name )? )?
 //    | LOCAL ( '.' name )?
 //    | GLOBAL ( '.' name )?
