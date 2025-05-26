@@ -289,7 +289,7 @@ alterTableAction
 
     | 'CHANGE' 'COLUMN'? name name columnDef place?
     | 'MODIFY' 'COLUMN'? name columnDef place?
-    | 'DROP' ( 'COLUMN'? name ('RESTRICT' | 'CASCADE')? | 'FOREIGN' 'KEY' name | 'PRIMARY' 'KEY' | keyOrIndex qname | 'CHECK' name | 'CONSTRAINT' name )
+    | 'DROP' ( 'COLUMN'? name ('RESTRICT' | 'CASCADE')? | 'FOREIGN' 'KEY' name | 'PRIMARY' 'KEY' | indexKey qname | 'CHECK' name | 'CONSTRAINT' name )
     | 'DISABLE' 'KEYS'
     | 'ENABLE' 'KEYS'
     | 'ALTER' 'COLUMN'? name ( 'SET' 'DEFAULT' ( '(' term ')' | literal ) | 'DROP' 'DEFAULT' | 'SET' visibility )
@@ -298,7 +298,7 @@ alterTableAction
     | 'ALTER' 'CONSTRAINT' name constraintEnforcement
     | 'RENAME' 'COLUMN' name 'TO' name
     | 'RENAME' ('TO' | 'AS')? qname
-    | 'RENAME' keyOrIndex qname 'TO' name
+    | 'RENAME' indexKey qname 'TO' name
     | 'CONVERT' 'TO' charset collate?
     | 'FORCE'
 //    | 'ORDER' 'BY' name direction? (',' name direction?)*
@@ -580,7 +580,7 @@ loadXML
 
 select
     : with? selectCore ( ( 'UNION' | 'EXCEPT' | 'INTERSECT' ) ('DISTINCT' | 'ALL')? selectCore )*
-      orderBy? limit? /* into? */ locking? into?
+      orderBy? limit? /* into? */ locking* into?
     ;
 
 selectCore
@@ -701,19 +701,17 @@ direction
     : 'ASC' | 'DESC' ;
 
 from
-    : 'FROM' ('DUAL' | tables )
-    ;
+    : 'FROM' ( 'DUAL' | tables ) ;
 
 tableReferenceList
-    : tables (',' tables)*
-    ;
+    : tables (',' tables)* ;
 
 tables
     : tables ',' tables
     | tables (('INNER' | 'CROSS')? 'JOIN' | 'STRAIGHT_JOIN') tables ( 'ON' term | 'USING' '(' name (',' name)* ')' )?
     | tables ('LEFT' | 'RIGHT') 'OUTER'? 'JOIN' tables ( 'ON' term | 'USING' '(' name (',' name)* ')' )
     | tables ('NATURAL' 'INNER'? 'JOIN' | 'NATURAL' ('LEFT' | 'RIGHT') 'OUTER'? 'JOIN' ) tables
-    | qname partition? tableAlias? (indexHint (',' indexHint)*)? ('TABLESAMPLE' ('SYSTEM' | 'BERNOULLI') '(' literal ')')?
+    | qname partition? tableAlias? indexHint* ('TABLESAMPLE' ('SYSTEM' | 'BERNOULLI') '(' literal ')')?
     | 'JSON_TABLE' '(' term ',' string jsonColumns ')' tableAlias?
     | 'LATERAL'? '(' select ')' tableAlias? columns?
     | '{' 'OJ' tables '}'
@@ -758,19 +756,17 @@ jsonResponse
     ;
 
 tableAlias
-    : 'AS'? name
-    ;
+    : 'AS'? name ;
 
 indexHint
-    : ('FORCE' | 'IGNORE' | 'USE' ) keyOrIndex indexHintClause? '(' name (',' name)* ')'
+    : 'USE' indexKey indexHintScope? '(' ( name ( ',' name )* )? ')'
+    | ( 'IGNORE' | 'FORCE' ) indexKey indexHintScope? '(' ( name ( ',' name )* ) ')'
     ;
 
-keyOrIndex
-    : 'KEY'
-    | 'INDEX'
-    ;
+indexKey
+    : 'INDEX' | 'KEY' ;
 
-indexHintClause
+indexHintScope
     : 'FOR' ('JOIN' | 'ORDER' 'BY' | 'GROUP' 'BY')
     ;
 
@@ -1128,7 +1124,7 @@ assignToKeycache
     ;
 
 cacheKeyList
-    : keyOrIndex '(' (name (',' name)*)? ')'
+    : indexKey '(' (name (',' name)*)? ')'
     ;
 
 flushOption
@@ -1576,11 +1572,11 @@ constraintEnforcement
     ;
 
 tableConstraintDef
-    : keyOrIndex indexNameAndType? '(' keyPart (',' keyPart)* ')' indexOption*
-    | 'FULLTEXT' keyOrIndex? name? '(' keyPart (',' keyPart)* ')' indexOption*
-    | 'SPATIAL' keyOrIndex? name? '(' keyPart (',' keyPart)* ')' indexOption*
+    : indexKey indexNameAndType? '(' keyPart (',' keyPart)* ')' indexOption*
+    | 'FULLTEXT' indexKey? name? '(' keyPart (',' keyPart)* ')' indexOption*
+    | 'SPATIAL' indexKey? name? '(' keyPart (',' keyPart)* ')' indexOption*
     | ('CONSTRAINT' name?)?
-        ( ('PRIMARY' 'KEY' | 'UNIQUE' keyOrIndex?) indexNameAndType? '(' keyPart (',' keyPart)* ')' indexOption*
+        ( ('PRIMARY' 'KEY' | 'UNIQUE' indexKey?) indexNameAndType? '(' keyPart (',' keyPart)* ')' indexOption*
         | 'FOREIGN' 'KEY' name? '(' keyPart (',' keyPart)* ')' referenceDef
         | 'CHECK' '(' term ')' constraintEnforcement?
         )
