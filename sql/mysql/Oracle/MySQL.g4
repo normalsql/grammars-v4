@@ -1432,6 +1432,7 @@ dataType
     | 'MULTILINESTRING'
     | 'POLYGON'
     | 'MULTIPOLYGON'
+    | 'VECTOR' ('(' DECIMAL ')')?
     ;
 
 
