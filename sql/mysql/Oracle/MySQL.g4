@@ -110,7 +110,7 @@ statement
     | 'ALTER' 'USER' exists?  ( createUser (',' createUser)* | alterUser (',' alterUser)* ) createUserTail
     | 'ALTER' 'USER' exists?  userFunction
         // TODO authOption
-        ( ('IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' | 'IDENTIFIED' 'BY' qname ) replacePassword? retainCurrentPassword?
+        ( ('IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' | 'IDENTIFIED' 'BY' qname ) replace? retainCurrentPassword?
         | 'DISCARD' 'OLD' 'PASSWORD'
         | userRegistration?
         )
@@ -198,8 +198,9 @@ statement
     | 'SET' 'NAMES' ( equal term | qname collate? | 'DEFAULT' )
     | 'SET' ('GLOBAL' | 'SESSION')? 'TRANSACTION' transactionCharacteristics ( ',' transactionCharacteristics )*
 //    | 'SET' scope? 'DEFAULT'? qname equal term (',' (scope 'DEFAULT'? qname equal term | optionValueNoOptionType))*
-//    | 'SET' 'PASSWORD' ('FOR' user)? equal ( string replacePassword? retainCurrentPassword? | 'PASSWORD' '(' string ')' )
-//    | 'SET' 'PASSWORD' ('FOR' user)? 'TO' 'RANDOM' replacePassword? retainCurrentPassword?
+    | 'SET' 'PASSWORD' ('FOR' user)? ( equal string | 'TO' 'RANDOM' ) replace? retainCurrentPassword?
+//            | 'PASSWORD' '(' string ')' )
+//    | 'SET' 'PASSWORD' ('FOR' user)?  replace? retainCurrentPassword?
 
     | 'TRUNCATE' 'TABLE'? qname
     | 'IMPORT' 'TABLE' 'FROM' strings
@@ -910,11 +911,11 @@ ssl
 alterUser
     : oldAlterUser
     | user
-        ( 'IDENTIFIED' 'BY' string ( replacePassword retainCurrentPassword? | retainCurrentPassword? )
-        | 'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' ( retainCurrentPassword? | replacePassword retainCurrentPassword? )
+        ( 'IDENTIFIED' 'BY' string ( replace retainCurrentPassword? | retainCurrentPassword? )
+        | 'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' ( retainCurrentPassword? | replace retainCurrentPassword? )
         | 'IDENTIFIED' 'WITH' name
         | 'IDENTIFIED' 'WITH' name 'AS' string retainCurrentPassword?
-        | 'IDENTIFIED' 'WITH' name 'BY' string ( replacePassword retainCurrentPassword? | retainCurrentPassword? )
+        | 'IDENTIFIED' 'WITH' name 'BY' string ( replace retainCurrentPassword? | retainCurrentPassword? )
         | 'IDENTIFIED' 'WITH' name 'BY' 'RANDOM' 'PASSWORD' retainCurrentPassword?
         | discardOldPassword?
         | 'ADD' factor identification ('ADD' factor identification)?
@@ -925,13 +926,13 @@ alterUser
 
 oldAlterUser
     : user 'IDENTIFIED' 'BY'
-        ( string replacePassword retainCurrentPassword?
+        ( string replace retainCurrentPassword?
         | string retainCurrentPassword?
-        | 'RANDOM' 'PASSWORD' replacePassword? retainCurrentPassword?
+        | 'RANDOM' 'PASSWORD' replace? retainCurrentPassword?
         )
     | user 'IDENTIFIED' 'WITH' (
         name (
-            'BY' string replacePassword retainCurrentPassword?
+            'BY' string replace retainCurrentPassword?
             | 'AS' string retainCurrentPassword?
             | 'BY' string retainCurrentPassword?
             | 'BY' 'RANDOM' 'PASSWORD' retainCurrentPassword?
@@ -945,17 +946,20 @@ userFunction
     ;
 
 createUserTail
-    : requireClause?
-      ( 'WITH'
-        ( 'MAX_QUERIES_PER_HOUR' DECIMAL
-        | 'MAX_UPDATES_PER_HOUR' DECIMAL
-        | 'MAX_CONNECTIONS_PER_HOUR' DECIMAL
-        | 'MAX_USER_CONNECTIONS' DECIMAL
-        )+
-      )?
-      ( passwordOption2 | lockOption2 )?
+    : require?
+      resourceOption?
+      ( passwordOption2+ | lockOption2 )?
       ('COMMENT' string | 'ATTRIBUTE' string )*
     ;
+
+resourceOption
+    : 'WITH'
+      ( ( 'MAX_QUERIES_PER_HOUR'
+        | 'MAX_UPDATES_PER_HOUR'
+        | 'MAX_CONNECTIONS_PER_HOUR'
+        | 'MAX_USER_CONNECTIONS'
+        ) DECIMAL
+      )+ ;
 
 
 passwordOption2
@@ -970,23 +974,24 @@ passwordOption2
 lockOption2
     : 'ACCOUNT' ('LOCK' | 'UNLOCK') ;
 
-/*
-
-lock_option: {
-    ACCOUNT LOCK
-  | ACCOUNT UNLOCK
-}
-*/
-requireClause
+require
     : 'REQUIRE'
-        ( requireListElement ('AND'? requireListElement)*
-        | ('SSL' | 'X509' | 'NONE')
+        ( 'NONE'
+        | tlsOption ( 'AND'? tlsOption )*
         )
     ;
 
+tlsOption
+    : 'SSL'
+    | 'X509'
+    | ('CIPHER' | 'ISSUER' | 'SUBJECT') string
+    ;
+
+
+
 grantStatement
     : 'GRANT' roleOrPrivilegesList 'TO' user (',' user)* ( 'WITH' 'ADMIN' 'OPTION' )?
-    | 'GRANT' (roleOrPrivilegesList | 'ALL' 'PRIVILEGES'?) 'ON' aclType? grantIdentifier 'TO' grantTargetList requireClause? grantOptions? ('AS' 'USER' withRoles?)?
+    | 'GRANT' (roleOrPrivilegesList | 'ALL' 'PRIVILEGES'?) 'ON' aclType? grantIdentifier 'TO' grantTargetList require? grantOptions? ('AS' 'USER' withRoles?)?
     | 'GRANT' 'PROXY' 'ON' user 'TO' grantTargetList ( 'WITH' 'GRANT' 'OPTION' )?
     ;
 
@@ -1052,10 +1057,6 @@ roleOrPrivilege
 
 grantIdentifier
     : ( '*' | name ) ('.' ( '*' | name ))?
-    ;
-
-requireListElement
-    : ('CIPHER' | 'ISSUER' | 'SUBJECT') string
     ;
 
 grantOption
@@ -1822,8 +1823,7 @@ identification
     ;
 
 retainCurrentPassword
-    : 'RETAIN' 'CURRENT' 'PASSWORD'
-    ;
+    : 'RETAIN' 'CURRENT' 'PASSWORD' ;
 
 discardOldPassword
     : 'DISCARD' 'OLD' 'PASSWORD'
@@ -1836,12 +1836,10 @@ userRegistration
     ;
 
 factor
-    : DECIMAL 'FACTOR'
-    ;
+    : DECIMAL 'FACTOR' ;
 
 replacePassword
-    : 'REPLACE' string
-    ;
+    : 'REPLACE' string ;
 
 user
     : userName
