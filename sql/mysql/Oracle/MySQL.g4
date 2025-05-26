@@ -1389,7 +1389,7 @@ dataType
     | 'INT8'
     | 'MIDDLEINT'
     | ('REAL' | 'DOUBLE' 'PRECISION'?) floatOptions? fieldOptions?
-    | ('FLOAT' | 'DECIMAL' | 'NUMERIC' | 'FIXED') floatOptions? fieldOptions?
+    | ('FLOAT' | 'DEC' | 'DECIMAL' | 'NUMERIC' | 'FIXED') floatOptions? fieldOptions?
     | 'BIT' ('(' ( DECIMAL | FLOAT ) ')')?
     | ('BOOL' | 'BOOLEAN')
     | ('NCHAR' | 'NATIONAL' 'CHAR') ('(' ( DECIMAL | FLOAT ) ')')? 'BINARY'?
@@ -2732,9 +2732,6 @@ LOCAL
 GLOBAL
     : '@' '@' ( ID ( '.' ID )? )? ;
 
-CHARSET
-    : '_' [A-Z0-9$\u0080-\uFFFF]+ ;
-
 STRING
     : '\'' ('\\'? .)*? '\''
     | '$$' .*? '$$'
@@ -2743,9 +2740,13 @@ STRING
 NATIONAL
     : 'N' STRING ;
 
+// TODO match against supported list, otherwise is an ID
+CHARSET
+    : '_' [A-Z0-9]+ ;
+
 ID
     : '`' ( ~'`' | '``' )* '`'
-    | [A-Z0-9$\u0080-\uFFFF] [A-Z0-9_$\u0080-\uFFFF]*
+    | [A-Z0-9_$\u0080-\uFFFF]+
     ;
 
 
@@ -2759,9 +2760,10 @@ BLOB
 NOPE options { caseInsensitive = false; }
     : '\\N' ;
 
-// Allows nested block comments. Useful, but probably incorrect.
 BLOCK_COMMENT
-    : '/*' ( BLOCK_COMMENT | ~[*/] | '*' ~'/' )* '*/' -> channel(HIDDEN);
+// Nested block comments. Useful, but incorrect.
+//    : '/*' ( BLOCK_COMMENT | ~[*/] | '*' ~'/' )* '*/' -> channel(HIDDEN);
+    : '/*' .*? '*/' -> channel(HIDDEN);
 
 // Another MySQL-ism...?
 POUND_COMMENT
