@@ -106,10 +106,11 @@ statement
     | 'DROP' 'TRIGGER' exists? qname
 
     | 'CREATE' 'USER' notExists? createUser (',' createUser)*
-    //  ('DEFAULT' 'ROLE' roleList)? createUserTail
+      ('DEFAULT' 'ROLE' roleList)? createUserTail
     | 'ALTER' 'USER' exists?  ( createUser (',' createUser)* | alterUser (',' alterUser)* ) createUserTail
     | 'ALTER' 'USER' exists?  userFunction
-        ( ('IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' | 'IDENTIFIED' 'BY' string) replacePassword? retainCurrentPassword?
+        // TODO authOption
+        ( ('IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' | 'IDENTIFIED' 'BY' qname ) replacePassword? retainCurrentPassword?
         | 'DISCARD' 'OLD' 'PASSWORD'
         | userRegistration?
         )
@@ -228,7 +229,7 @@ statement
     | 'SHOW' scope? 'STATUS' like?
     | 'SHOW' 'FULL'? 'PROCESSLIST'
     | 'SHOW' scope? 'VARIABLES' like?
-    | 'SHOW' charset like?
+    | 'SHOW' charset3 like?
     | 'SHOW' 'COLLATION' like?
     | 'SHOW' 'PRIVILEGES'
     | 'SHOW' 'GRANTS' ('FOR' user ('USING' user (',' user)*)?)?
