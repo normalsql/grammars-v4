@@ -1316,7 +1316,7 @@ ID: ID_LITERAL;
 // DOUBLE_QUOTE_ID:                  '"' ~'"'+ '"';
 REVERSE_QUOTE_ID : BQUOTA_STRING;
 HOST_IP_ADDRESS  : (AT_SIGN IP_ADDRESS);
-LOCAL_ID         : AT_SIGN ( STRING_LITERAL | [A-Z0-9._$\u0080-\uFFFF]+);
+LOCAL_ID         : AT_SIGN ( [A-Z0-9._$\u0080-\uFFFF]+ | STRING_LITERAL );
 GLOBAL_ID        : AT_SIGN AT_SIGN ( [A-Z0-9._$\u0080-\uFFFF]+ | BQUOTA_STRING);
 
 // Fragments for Literal primitives
