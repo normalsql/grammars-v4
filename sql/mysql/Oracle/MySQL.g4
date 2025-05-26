@@ -1904,10 +1904,10 @@ literal
 string
     : CHARSET? STRING+
     | CHARSET? QUOTED+
-    // HEXADECIMAL without a CHARSET prefix is a number
+    // Note: HEXADECIMAL without a CHARSET prefix is a number
     | CHARSET HEXADECIMAL
+    | CHARSET? BLOB
     | NATIONAL STRING*
-    | BLOB
     ;
 
 strings
