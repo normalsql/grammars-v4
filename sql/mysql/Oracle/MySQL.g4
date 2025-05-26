@@ -946,27 +946,37 @@ userFunction
 
 createUserTail
     : requireClause?
-        ('WITH'
-          ( 'MAX_QUERIES_PER_HOUR' DECIMAL
-          | 'MAX_UPDATES_PER_HOUR' DECIMAL
-          | 'MAX_CONNECTIONS_PER_HOUR' DECIMAL
-          | 'MAX_USER_CONNECTIONS' DECIMAL
-          )*
-          ('ACCOUNT' ('LOCK' | 'UNLOCK')
-          | 'PASSWORD'
-          ( 'EXPIRE' ( 'INTERVAL' DECIMAL 'DAY' | 'NEVER' | 'DEFAULT' )?
-          | 'HISTORY' (DECIMAL | 'DEFAULT')
-          | 'REUSE' 'INTERVAL' ( DECIMAL 'DAY' | 'DEFAULT' )
-          | 'REQUIRE' 'CURRENT' ( 'DEFAULT' | 'OPTIONAL' )?
-          )
-          | 'FAILED_LOGIN_ATTEMPTS' DECIMAL
-          | 'PASSWORD_LOCK_TIME'
-          )
-          (DECIMAL | 'UNBOUNDED')
-        )*
-        ('COMMENT' string | 'ATTRIBUTE' string )*
+      ( 'WITH'
+        ( 'MAX_QUERIES_PER_HOUR' DECIMAL
+        | 'MAX_UPDATES_PER_HOUR' DECIMAL
+        | 'MAX_CONNECTIONS_PER_HOUR' DECIMAL
+        | 'MAX_USER_CONNECTIONS' DECIMAL
+        )+
+      )?
+      ( passwordOption2 | lockOption2 )?
+      ('COMMENT' string | 'ATTRIBUTE' string )*
     ;
 
+
+passwordOption2
+  : 'PASSWORD' 'EXPIRE' ( 'DEFAULT' | 'NEVER' | 'INTERVAL' DECIMAL 'DAY' )?
+  | 'PASSWORD' 'HISTORY' ( 'DEFAULT' | DECIMAL )
+  | 'PASSWORD' 'REUSE' 'INTERVAL' ( 'DEFAULT' | DECIMAL 'DAY' )
+  | 'PASSWORD' 'REQUIRE' 'CURRENT' ('DEFAULT' | 'OPTIONAL')?
+  | 'FAILED_LOGIN_ATTEMPTS' DECIMAL
+  | 'PASSWORD_LOCK_TIME' (DECIMAL | 'UNBOUNDED')
+;
+
+lockOption2
+    : 'ACCOUNT' ('LOCK' | 'UNLOCK') ;
+
+/*
+
+lock_option: {
+    ACCOUNT LOCK
+  | ACCOUNT UNLOCK
+}
+*/
 requireClause
     : 'REQUIRE'
         ( requireListElement ('AND'? requireListElement)*
