@@ -62,8 +62,8 @@ statement
     | 'ALTER' definer? 'EVENT' qname ('ON' 'SCHEDULE' schedule)? ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ('RENAME' 'TO' qname)? ( 'ENABLE' | 'DISABLE' ('ON' replica)? )? ('COMMENT' string)? ('DO' compoundStatement)?
     | 'DROP' 'EVENT' exists? qname
 
-    | 'CREATE' 'AGGREGATE'? 'FUNCTION' notExists? qname 'RETURNS' ( 'STRING' | 'INT' | 'REAL' | 'DECIMAL' ) 'SONAME' string
     | 'CREATE' definer? 'FUNCTION' notExists? qname '(' ( functionParameter (',' functionParameter)* )? ')' 'RETURNS' dataType collate? routineCreateOption* storedRoutineBody
+    | 'CREATE' 'AGGREGATE'? 'FUNCTION' notExists? qname 'RETURNS' ( 'STRING' | 'INT' | 'INTEGER' | 'REAL' | 'DECIMAL' ) 'SONAME' string
     | 'ALTER' 'FUNCTION' qname routineCreateOption*
     | 'DROP' 'FUNCTION' exists? qname
     | 'CREATE' definer? 'PROCEDURE' notExists? qname '(' ( procedureParameter (',' procedureParameter)* )? ')' routineCreateOption* storedRoutineBody
@@ -201,6 +201,7 @@ statement
     | 'SET' 'PASSWORD' ('FOR' user)? ( equal string | 'TO' 'RANDOM' ) replace? retainCurrentPassword?
 //            | 'PASSWORD' '(' string ')' )
 //    | 'SET' 'PASSWORD' ('FOR' user)?  replace? retainCurrentPassword?
+    | 'SET' charset3 qname
 
     | 'TRUNCATE' 'TABLE'? qname
     | 'IMPORT' 'TABLE' 'FROM' strings
@@ -264,9 +265,6 @@ statement
     | 'GET' ('CURRENT' | 'STACKED')? 'DIAGNOSTICS' ( statementInformationItem (',' statementInformationItem)* | 'CONDITION' literal conditionInformationItem ( ',' conditionInformationItem )* )
     | ( 'SIGNAL' signalCondition | 'RESIGNAL' signalCondition? ) ( 'SET' signalItem (',' signalItem)* )?
     | beginWork
-//    | 'CONNECTION' name
-//    | 'sync_slave_with_master'
-//    | 'DELIMITER' .
     ;
 
 
@@ -518,18 +516,18 @@ valuesReference
     : 'AS' name columns?
     ;
 
-loadDataOld
-    : 'LOAD' 'DATA' ('LOW_PRIORITY' | 'CONCURRENT')?
-      'FROM'? 'LOCAL'? ('INFILE' | ('URL' | 'S3'))? string ('COUNT' DECIMAL | ID DECIMAL)?
-      ('IN' 'PRIMARY' 'KEY' 'ORDER')?
-      ( 'REPLACE' | 'IGNORE' )?
-      'INTO' 'TABLE' qname partition? charset? ('ROWS' 'IDENTIFIED' 'BY' string)?
-      fields? lines?
-      ('IGNORE' DECIMAL ('LINES' | 'ROWS'))?
-      ('(' (name ( ',' name )*)? ')')?
-      ( 'SET' setter (',' setter)* )?
-      ('PARALLEL' '=' DECIMAL)? ('MEMORY' '=' byteSize)? ('ALGORITHM' '=' 'BULK')?
-    ;
+//loadDataOld
+//    : 'LOAD' 'DATA' ('LOW_PRIORITY' | 'CONCURRENT')?
+//      'FROM'? 'LOCAL'? ('INFILE' | ('URL' | 'S3'))? string ('COUNT' DECIMAL | ID DECIMAL)?
+//      ('IN' 'PRIMARY' 'KEY' 'ORDER')?
+//      ( 'REPLACE' | 'IGNORE' )?
+//      'INTO' 'TABLE' qname partition? charset? ('ROWS' 'IDENTIFIED' 'BY' string)?
+//      fields? lines?
+//      ('IGNORE' DECIMAL ('LINES' | 'ROWS'))?
+//      ('(' (name ( ',' name )*)? ')')?
+//      ( 'SET' setter (',' setter)* )?
+//      ('PARALLEL' '=' DECIMAL)? ('MEMORY' '=' byteSize)? ('ALGORITHM' '=' 'BULK')?
+//    ;
 
 loadData
     : 'LOAD' 'DATA' ('LOW_PRIORITY' | 'CONCURRENT')?
@@ -1795,16 +1793,18 @@ setVariable
 
 
 fields
-    : ( 'COLUMNS' | 'FIELDS' )
-      ( 'TERMINATED' 'BY' string )?
-      ( 'OPTIONALLY'? 'ENCLOSED' 'BY' string )?
-      ( 'ESCAPED' 'BY' string )?
+    : ( 'FIELDS' | 'COLUMNS' )
+      ( 'TERMINATED' 'BY' ( string | HEXADECIMAL )
+      | 'OPTIONALLY'? 'ENCLOSED' 'BY' ( string | HEXADECIMAL )
+      | 'ESCAPED' 'BY' ( string | HEXADECIMAL )
+      )+
     ;
 
 lines
     : 'LINES'
-      ( 'TERMINATED' 'BY' string )?
-      ( 'STARTING' 'BY' string )?
+      ( 'STARTING' 'BY' string
+      | 'TERMINATED' 'BY' string
+      )+
     ;
 
 createUser
@@ -1848,11 +1848,8 @@ user
     ;
 
 userName
-// TODO: remove or disable <SECRET>
-//    : ( '<SECRET>' | ID | STRING | QUOTED | keyword )
-    : ( ID | STRING | QUOTED | keyword )
-      LOCAL?
-    ;
+//    : ( string | keyword ) LOCAL? ;
+    : name LOCAL? ;
 
 like
     : 'LIKE' name
