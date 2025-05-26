@@ -1849,7 +1849,8 @@ user
 
 userName
 // TODO: remove or disable <SECRET>
-    : ( '<SECRET>' | ID | STRING | QUOTED | keyword )
+//    : ( '<SECRET>' | ID | STRING | QUOTED | keyword )
+    : ( ID | STRING | QUOTED | keyword )
       LOCAL?
     ;
 
@@ -1917,6 +1918,8 @@ string
     | CHARSET HEXADECIMAL
     | CHARSET? BLOB
     | NATIONAL STRING*
+    // TODO disable <secret> after testing
+    | '<secret>'
     ;
 
 strings
@@ -1938,8 +1941,8 @@ name
     : ID
     | keyword
     | string
-// TODO: remove or disable <SECRET>
-    | '<SECRET>'
+//// TODO: remove or disable <SECRET>
+//    | '<SECRET>'
     ;
 
 byteSize
