@@ -106,16 +106,24 @@ statement
     | 'DROP' 'TRIGGER' exists? qname
 
     | 'CREATE' 'USER' notExists? createUser (',' createUser)*
-      ('DEFAULT' 'ROLE' roleList)? createUserTail
-    | 'ALTER' 'USER' exists?  ( createUser (',' createUser)* | alterUser (',' alterUser)* ) createUserTail
-    | 'ALTER' 'USER' exists?  userFunction
-        // TODO authOption
-        ( ('IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' | 'IDENTIFIED' 'BY' qname ) replace? retainCurrentPassword?
-        | 'DISCARD' 'OLD' 'PASSWORD'
-        | userRegistration?
-        )
+      ('DEFAULT' 'ROLE' roleList)? require?
+      resourceOption?
+      ( passwordOption2 | lockOption2 )*
+      ('COMMENT' string | 'ATTRIBUTE' string )*
+
+    | 'ALTER' 'USER' exists? user alterAuthOption? require? resourceOption?
+          ( passwordOption2 | lockOption2 )*
+          ('COMMENT' string | 'ATTRIBUTE' string )*
+
+//    | 'ALTER' 'USER' exists?  userFunction
+//        // TODO authOption
+//        ( ('IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' | 'IDENTIFIED' 'BY' qname ) replace? retainCurrentPassword?
+//        | 'DISCARD' 'OLD' 'PASSWORD'
+//        | userRegistration?
+//        )
 //    | 'ALTER' 'USER' exists?  user ( 'DEFAULT' 'ROLE' ('ALL' | 'NONE' | roleList) | userRegistration? )
-    | 'ALTER' 'USER' exists?  user 'DEFAULT' 'ROLE' ('ALL' | 'NONE' | userName ( ',' userName )* )
+    | 'ALTER' 'USER' exists?  user 'DEFAULT' 'ROLE' ('ALL' | 'NONE' | roleList )
+
     | 'DROP' 'USER' exists? user (',' user)*
     | 'RENAME' 'USER' user 'TO' user ( ',' user 'TO' user )*
 
@@ -183,7 +191,7 @@ statement
     | grantStatement
     | revokeStatement
     | setRoleStatement
-    | 'ANALYZE' noLogging? 'TABLE' qname (',' qname)* histogram?
+    | 'ANALYZE' noLogging? ( 'TABLE' | 'TABLES' ) qname (',' qname)* histogram?
     | 'CHECK' 'TABLE' qname (',' qname)* checkOption*
     | 'CHECKSUM' 'TABLE' qname (',' qname)* ( 'QUICK' | 'EXTENDED' )?
     | 'OPTIMIZE' noLogging? 'TABLE' qname (',' qname)*
@@ -257,8 +265,10 @@ statement
     | 'LOAD' 'INDEX' 'INTO' 'CACHE' preloadTail
     | 'SHUTDOWN'
 
+    | 'CREATE' 'LIBRARY' qname 'LANGUAGE' name ( 'COMMENT' string )? 'AS' string
+
     | ('EXPLAIN' | 'DESCRIBE' | 'DESC') qname ( string | qname )?
-    | ('EXPLAIN' | 'DESCRIBE' | 'DESC') explainOption? ( 'FOR' 'DATABASE' name )? explainableStatement
+    | ('EXPLAIN' | 'DESCRIBE' | 'DESC') explainOption? ( 'FOR' ( 'DATABASE' | 'SCHEMA' ) name )? explainableStatement
     | 'HELP' name
     | 'USE' name
     | 'RESTART'
@@ -362,12 +372,13 @@ storedRoutineBody
 routineCreateOption
     : 'COMMENT' string
     | 'LANGUAGE' name
-    | 'NO' 'SQL'
+    | 'NOT'? 'DETERMINISTIC'
     | 'CONTAINS' 'SQL'
+    | 'NO' 'SQL'
     | 'READS' 'SQL' 'DATA'
     | 'MODIFIES' 'SQL' 'DATA'
     | security
-    | 'NOT'? 'DETERMINISTIC'
+    | 'USING' '(' name ( ',' name )*')'
     ;
 
 createIndexOption
@@ -482,7 +493,7 @@ handlerReadOrScan
 replace
     : 'REPLACE' ('LOW_PRIORITY' | 'DELAYED')?
        'INTO'? qname partition?
-       ( insertFromConstructor | 'SET' setter (',' setter)* | insertQueryExpression )
+       ( insertFromConstructor | 'SET' setter (',' setter)* | insertQueryExpression )?
     ;
 
 
@@ -546,18 +557,18 @@ loadData
     ;
 
 
-loadXMLOld
-    : 'LOAD' 'XML' ('LOW_PRIORITY' | 'CONCURRENT')?
-      'FROM'? 'LOCAL'? ('INFILE' | ('URL' | 'S3'))? string ('COUNT' DECIMAL | ID DECIMAL)?
-      ('IN' 'PRIMARY' 'KEY' 'ORDER')?
-      ( 'REPLACE' | 'IGNORE' )?
-      'INTO' 'TABLE' qname partition? charset? ('ROWS' 'IDENTIFIED' 'BY' string)?
-      fields? lines?
-      ('IGNORE' DECIMAL ('LINES' | 'ROWS'))?
-      ('(' (name ( ',' name )*)? ')')?
-      ( 'SET' setter (',' setter)* )?
-      ('PARALLEL' '=' DECIMAL)? ('MEMORY' '=' byteSize)? ('ALGORITHM' '=' 'BULK')?
-    ;
+//loadXMLOld
+//    : 'LOAD' 'XML' ('LOW_PRIORITY' | 'CONCURRENT')?
+//      'FROM'? 'LOCAL'? ('INFILE' | ('URL' | 'S3'))? string ('COUNT' DECIMAL | ID DECIMAL)?
+//      ('IN' 'PRIMARY' 'KEY' 'ORDER')?
+//      ( 'REPLACE' | 'IGNORE' )?
+//      'INTO' 'TABLE' qname partition? charset? ('ROWS' 'IDENTIFIED' 'BY' string)?
+//      fields? lines?
+//      ('IGNORE' DECIMAL ('LINES' | 'ROWS'))?
+//      ('(' (name ( ',' name )*)? ')')?
+//      ( 'SET' setter (',' setter)* )?
+//      ('PARALLEL' '=' DECIMAL)? ('MEMORY' '=' byteSize)? ('ALGORITHM' '=' 'BULK')?
+//    ;
 
 loadXML
     : 'LOAD' 'XML' ('LOW_PRIORITY' | 'CONCURRENT')? 'LOCAL'?
@@ -728,9 +739,6 @@ item
     | term alias?
     | qname ( '.'  '*' )?
     ;
-
-//fudge : BASE16 ;
-fudge : DECIMAL ;
 
 alias
     : 'AS'? name
@@ -906,48 +914,42 @@ ssl
     ;
 
 
-alterUser
-    : oldAlterUser
-    | user
-        ( 'IDENTIFIED' 'BY' string ( replace retainCurrentPassword? | retainCurrentPassword? )
-        | 'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' ( retainCurrentPassword? | replace retainCurrentPassword? )
-        | 'IDENTIFIED' 'WITH' name
-        | 'IDENTIFIED' 'WITH' name 'AS' string retainCurrentPassword?
-        | 'IDENTIFIED' 'WITH' name 'BY' string ( replace retainCurrentPassword? | retainCurrentPassword? )
-        | 'IDENTIFIED' 'WITH' name 'BY' 'RANDOM' 'PASSWORD' retainCurrentPassword?
-        | discardOldPassword?
-        | 'ADD' factor identification ('ADD' factor identification)?
-        | 'MODIFY' factor identification ( 'MODIFY' factor identification )?
-        | 'DROP' factor ('DROP' factor)?
-        )
-    ;
+//alterUser
+//    : oldAlterUser
+//    | user
+//        ( 'IDENTIFIED' 'BY' string ( replace retainCurrentPassword? | retainCurrentPassword? )
+//        | 'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' ( retainCurrentPassword? | replace retainCurrentPassword? )
+//        | 'IDENTIFIED' 'WITH' name
+//        | 'IDENTIFIED' 'WITH' name 'AS' string retainCurrentPassword?
+//        | 'IDENTIFIED' 'WITH' name 'BY' string ( replace retainCurrentPassword? | retainCurrentPassword? )
+//        | 'IDENTIFIED' 'WITH' name 'BY' 'RANDOM' 'PASSWORD' retainCurrentPassword?
+//        | discardOldPassword?
+//        | 'ADD' factor identified ('ADD' factor identified)?
+//        | 'MODIFY' factor identified ( 'MODIFY' factor identified )?
+//        | 'DROP' factor ('DROP' factor)?
+//        )
+//    ;
 
-oldAlterUser
-    : user 'IDENTIFIED' 'BY'
-        ( string replace retainCurrentPassword?
-        | string retainCurrentPassword?
-        | 'RANDOM' 'PASSWORD' replace? retainCurrentPassword?
-        )
-    | user 'IDENTIFIED' 'WITH' (
-        name (
-            'BY' string replace retainCurrentPassword?
-            | 'AS' string retainCurrentPassword?
-            | 'BY' string retainCurrentPassword?
-            | 'BY' 'RANDOM' 'PASSWORD' retainCurrentPassword?
-        )?
-    )
-    | user discardOldPassword?
-    ;
+//oldAlterUser
+//    : 'OOK' ;
+//    : user 'IDENTIFIED' 'BY'
+//        ( string replace retainCurrentPassword?
+//        | string retainCurrentPassword?
+//        | 'RANDOM' 'PASSWORD' replace? retainCurrentPassword?
+//        )
+//    | user 'IDENTIFIED' 'WITH' (
+//        name (
+//            'BY' string replace retainCurrentPassword?
+//            | 'AS' string retainCurrentPassword?
+//            | 'BY' string retainCurrentPassword?
+//            | 'BY' 'RANDOM' 'PASSWORD' retainCurrentPassword?
+//        )?
+//    )
+//    | user discardOldPassword?
+//    ;
 
 userFunction
     : 'USER' '(' ')'
-    ;
-
-createUserTail
-    : require?
-      resourceOption?
-      ( passwordOption2+ | lockOption2 )?
-      ('COMMENT' string | 'ATTRIBUTE' string )*
     ;
 
 resourceOption
@@ -1070,7 +1072,7 @@ setRoleStatement
     ;
 
 roleList
-    : userName (',' userName)*
+    : userName ( ',' userName )*
     ;
 
 histogram
@@ -1146,7 +1148,7 @@ flushOption
 flushTables
     : ('TABLES' | 'TABLE')
       ( 'WITH' 'READ' 'LOCK'
-      | name (',' name)* ('FOR' 'EXPORT' | 'WITH' 'READ' 'LOCK')?
+      | qname (',' qname)* ('FOR' 'EXPORT' | 'WITH' 'READ' 'LOCK')?
       )?
     ;
 
@@ -1359,12 +1361,12 @@ udfExpr
 castType
     : 'BINARY' ('(' DECIMAL ')')?
 //    | 'CHAR' ('(' INTEGER ')')? charsetWithOptBinary?
-    | 'CHAR' ('(' DECIMAL ')')? charset2?
+    | 'CHAR' ('(' DECIMAL ')')? charset3? 'BINARY'?
     | 'DATE'
     | 'DATETIME' ('(' DECIMAL ')')?
     | ('DEC' | 'DECIMAL' ) floatOptions?
-//    | 'DOUBLE' 'PRECISION'?
-    | 'DOUBLE'
+    | 'DOUBLE' 'PRECISION'?
+//    | 'DOUBLE'
     | 'FLOAT' floatOptions?
     | 'JSON'
     | ('NCHAR' | 'NATIONAL' 'CHAR') ('(' DECIMAL ')')?
@@ -1400,6 +1402,7 @@ dataType
     | ('BOOL' | 'BOOLEAN')
     | ('NCHAR' | 'NATIONAL' 'CHAR') ('(' ( DECIMAL | FLOAT ) ')')? 'BINARY'?
     | 'BINARY' ('(' ( DECIMAL | FLOAT ) ')')?
+//    | (( 'CHAR' | 'CHARACTER' ) 'VARYING'? | 'VARCHAR' ) ('(' ( DECIMAL | FLOAT ) ')')? charsetWithOptBinary?
     | (( 'CHAR' | 'CHARACTER' ) 'VARYING'? | 'VARCHAR' ) ('(' ( DECIMAL | FLOAT ) ')')? charsetWithOptBinary?
     | ( 'NATIONAL' 'VARCHAR' | 'NVARCHAR' | 'NCHAR' 'VARCHAR' | 'NATIONAL' 'CHAR' 'VARYING' | 'NCHAR' 'VARYING' ) '(' ( DECIMAL | FLOAT ) ')' 'BINARY'?
     | 'VARBINARY' ('(' ( DECIMAL | FLOAT ) ')')?
@@ -1418,7 +1421,7 @@ dataType
     | 'TEXT' ('(' ( DECIMAL | FLOAT ) ')')? charsetWithOptBinary?
     | 'MEDIUMTEXT' charsetWithOptBinary?
     | 'LONGTEXT' charsetWithOptBinary?
-    | 'ENUM' '(' string (',' string)* ')' charsetWithOptBinary?
+    | 'ENUM' '(' term ( ',' term )* ')' charsetWithOptBinary?
     | 'SET' '(' string (',' string)* ')' charsetWithOptBinary?
     | 'SERIAL'
     | 'JSON'
@@ -1442,11 +1445,11 @@ charset3
     : ( 'CHAR' 'SET' | 'CHARACTER' 'SET' | 'CHARSET' )
     ;
 
-charset2
-    : ( 'CHAR' 'SET' | 'CHARACTER' 'SET' | 'CHARSET' ) name
-    | 'ASCII'
-    | 'UNICODE'
-    ;
+//charset2
+//    : ( 'CHAR' 'SET' | 'CHARACTER' 'SET' | 'CHARSET' ) name
+//    | 'ASCII'
+//    | 'UNICODE'
+//    ;
 
 timeUnitToo
     : timeUnit
@@ -1808,13 +1811,10 @@ lines
     ;
 
 createUser
-    : user ( authOption ('AND' authOption ('AND' authOption)? )? )?
+    : user ( identified ('AND' identified ('AND' identified)? )? )?
     ;
 
-authOption
-    : identification ;
-
-identification
+identified
     : 'IDENTIFIED' 'BY' name
     | 'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD'
     | 'IDENTIFIED' 'WITH' name
@@ -1823,12 +1823,19 @@ identification
     | 'IDENTIFIED' 'WITH' name 'AS' name
     ;
 
+alterAuthOption
+    : 'IDENTIFIED' 'WITH' name ('AS' name)?
+    | 'IDENTIFIED' ('WITH' name )? ( 'BY' | 'AS' )
+      ( name | 'RANDOM' 'PASSWORD' ) ('REPLACE' qname)? retainCurrentPassword?
+    | 'DISCARD' 'OLD' 'PASSWORD'
+    ;
+
 retainCurrentPassword
     : 'RETAIN' 'CURRENT' 'PASSWORD' ;
 
-discardOldPassword
-    : 'DISCARD' 'OLD' 'PASSWORD'
-    ;
+//discardOldPassword
+//    : 'DISCARD' 'OLD' 'PASSWORD'
+//    ;
 
 userRegistration
     : factor 'INITIATE' 'REGISTRATION'
@@ -1839,8 +1846,8 @@ userRegistration
 factor
     : DECIMAL 'FACTOR' ;
 
-replacePassword
-    : 'REPLACE' string ;
+//replacePassword
+//    : 'REPLACE' string ;
 
 user
     : userName
@@ -1848,8 +1855,7 @@ user
     ;
 
 userName
-//    : ( string | keyword ) LOCAL? ;
-    : name LOCAL? ;
+    : name qname? ;
 
 like
     : 'LIKE' name
@@ -1938,8 +1944,8 @@ name
     : ID
     | keyword
     | string
-//// TODO: remove or disable <SECRET>
-//    | '<SECRET>'
+    // TODO remove this after lexer rule CHARSET is fixed
+    | CHARSET
     ;
 
 byteSize

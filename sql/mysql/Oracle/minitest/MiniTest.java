@@ -6,10 +6,11 @@ import static java.lang.System.out;
 
 void main() throws Exception
 {
-    report = new PrintWriter( "/Users/jasonosgood/Projects/fork/grammars-v4/sql/mysql/Oracle/report.txt" );
+    report = new PrintWriter( "/Users/jasonosgood/Projects/fork/grammars-v4/sql/mysql/Oracle/errors.txt" );
     report.println( "##" );
 
     String source = "/Users/jasonosgood/Projects/ScrapeMySQLTests/logs";
+//     source = "./examples";
     var paths = Files.walk( Paths.get( source ) ).filter( Files::isRegularFile );
 
     for( var p : paths.toList() )
@@ -29,8 +30,6 @@ void parse( Path p ) throws Exception
 {
     fileName = p.getFileName();
     out.println( fileName );
-//    report.println();
-//    report.println( p.getFileName() );
     var sql = Files.readString( p );
 
     var chars = CharStreams.fromString( sql );
@@ -45,6 +44,7 @@ void parse( Path p ) throws Exception
             _errors++;
 //            out.println( p.getFileName() );
             report.println( p.getFileName()+ " " + line + ":" + charPositionInLine  );
+            report.flush();
             out.println( p.getFileName()+ " " + line + ":" + charPositionInLine  );
 //            out.println( "line " + line + ":" + charPositionInLine + " " + msg );
         }
