@@ -2772,11 +2772,21 @@ BLOB
 NOPE options { caseInsensitive = false; }
     : '\\N' ;
 
+MYSQL_COMMENT
+    : '/*!' .*? '*/' -> channel(HIDDEN);
+//    : '/*' .*? '*/' -> channel(HIDDEN);
+
 BLOCK_COMMENT
 // Nested block comments. Useful, but incorrect.
-//    : '/*' ( BLOCK_COMMENT | ~[*/] | '*' ~'/' )* '*/' -> channel(HIDDEN);
-    : '/*' .*? '*/' -> channel(HIDDEN);
+    : '/*' ~[!] ( MYSQL_COMMENT | . )*? '*/' -> channel(HIDDEN);
+//    : '/*' ~[!] .*? '*/' -> channel(HIDDEN);
+//    : '/*' ( MYSQL_COMMENT | .*? ) '*/' -> channel(HIDDEN);
 
+//BLOCK_COMMENT
+//// Nested block comments. Useful, but incorrect.
+//    : '/*' ( BLOCK_COMMENT | ~[*/] | '*' ~'/' )* '*/' -> channel(HIDDEN);
+////    : '/*' .*? '*/' -> channel(HIDDEN);
+//
 // Another MySQL-ism...?
 POUND_COMMENT
     : '#' ~[\n\r]* -> channel(HIDDEN) ;
