@@ -131,7 +131,8 @@ statement
     | 'DROP' 'USER' exists? user ( ',' user )*
     | 'RENAME' 'USER' user 'TO' user ( ',' user 'TO' user )*
 
-    | 'CREATE' ('OR' 'REPLACE' viewAlgorithm? | viewAlgorithm)? definer? security? 'VIEW' qname columns? 'AS' select viewCheckOption?
+    | 'CREATE' ('OR' 'REPLACE')? viewAlgorithm? definer? security?
+      'VIEW' notExists?  qname columns? 'AS' select viewCheckOption?
     | 'ALTER' viewAlgorithm? definer? security? 'VIEW' qname columns? 'AS' select viewCheckOption?
     | 'DROP' 'VIEW' exists? qname (',' qname)* ('RESTRICT' | 'CASCADE')?
 
@@ -282,24 +283,29 @@ statement
     | 'KILL' ('CONNECTION' | 'QUERY')? term
     | 'LOAD' 'INDEX' 'INTO' 'CACHE' preloadTail
 
-    | 'CREATE' 'LIBRARY' qname 'LANGUAGE' name ( 'COMMENT' string )? 'AS' string
+    | 'CREATE' 'LIBRARY' notExists? qname ( 'LANGUAGE' name | 'COMMENT' string )+ 'AS' string
+    | 'DROP' 'LIBRARY' exists? qname
+    | 'ALTER' 'LIBRARY' exists? qname ( 'COMMENT' string )?
 
     | ('EXPLAIN' | 'DESCRIBE' | 'DESC') qname qname ?
 
     | ('EXPLAIN' | 'DESCRIBE' | 'DESC')
-      ( 'FORMAT' '=' ( 'TRADITIONAL' | 'JSON' | 'TREE' ) )?
+      'ANALYZE'?
+      ( 'FORMAT' '=' ( 'TRADITIONAL' | 'JSON' | 'TREE' | string ) )?
       ( 'INTO' qname )?
       ( ( 'FOR' ( 'DATABASE' | 'SCHEMA' ) name )? explainable
       | 'FOR' 'CONNECTION' DECIMAL
       )
 
-    | ('EXPLAIN' | 'DESCRIBE' | 'DESC')
-        'ANALYZE' ( 'FORMAT' '=' 'TREE' )? ( 'FOR' ( 'DATABASE' | 'SCHEMA' ) name )? select
+//    | ('EXPLAIN' | 'DESCRIBE' | 'DESC')
+//        'ANALYZE' ( 'FORMAT' '=' ( 'TRADITIONAL' | 'JSON' | 'TREE' ) )?
+//        ( 'INTO' qname )?
+//        ( 'FOR' ( 'DATABASE' | 'SCHEMA' ) name )? explainable
 
-    | ('EXPLAIN' | 'DESCRIBE' | 'DESC')
-       'ANALYZE' 'FORMAT' '=' 'JSON'
-       'INTO' qname
-       ( 'FOR' ( 'DATABASE' | 'SCHEMA' ) name )? explainable
+//    | ('EXPLAIN' | 'DESCRIBE' | 'DESC')
+//       'ANALYZE' 'FORMAT' '=' 'JSON'
+//       'INTO' qname
+//       ( 'FOR' ( 'DATABASE' | 'SCHEMA' ) name )? explainable
 
     | 'HELP' name
     | 'USE' name
@@ -831,7 +837,7 @@ lockOption
     ;
 
 xid
-    : string (',' string (',' DECIMAL)?)?
+    : string (',' string (',' ( DECIMAL | string ) )?)?
     ;
 
 resetOption
@@ -1725,7 +1731,7 @@ tableOption
     | 'TABLESPACE' '='? name
     | 'STORAGE' ('DISK' | 'MEMORY')
     | 'SECONDARY_ENGINE' equal? name
-    | 'UNION' '='? '(' qname (',' qname)* ')'
+    | 'UNION' '='? '(' ( qname ( ',' qname )* )? ')'
 //    | 'TABLE_CHECKSUM' '='? INTEGER
     ;
 
@@ -1907,21 +1913,12 @@ qname
     ;
 
 literal
-    // inlined the following (replacing 'name'), to shorten parse tree.
-    // may revert if this makes climbing tree harder.
-//    : name
     : ID
     | keyword
-//    | CHARSET
     | string
-//    // TODO can there be a space between CHARSET and STRING? if not, somehow move to lexer
-//    | STRING+
-//    | NATIONAL STRING*
-//    | BLOB
-//    | QUOTED+
     | ( '+' | '-' )? DECIMAL
     | ( '+' | '-' )? FLOAT
-    | HEXADECIMAL
+//    | HEXADECIMAL
     | BINARY
     | SIZE
     | datetime
@@ -1936,8 +1933,7 @@ literal
 string
     : CHARSET? STRING+
     | CHARSET? QUOTED+
-    // Note: HEXADECIMAL without a CHARSET prefix is a number
-    | CHARSET HEXADECIMAL
+    | CHARSET? HEXADECIMAL
     | CHARSET? BLOB
     | NATIONAL STRING*
     // TODO disable <secret> after testing
@@ -2667,8 +2663,10 @@ keyword
     | 'TINYTEXT'
     | 'TLS'
     | 'TO'
+    | 'TRADITIONAL'
     | 'TRAILING'
     | 'TRANSACTION'
+    | 'TREE'
     | 'TRIGGER'
     | 'TRIGGERS'
     | 'TRIM'
@@ -2763,7 +2761,7 @@ QUOTED
     : '"' ('\\'? .)*? '"' ;
 
 LOCAL
-    : '@' ( ID | STRING | IPV4 | IPV6 ) ;
+    : '@' ( ID | STRING | QUOTED | IPV4 | IPV6 ) ;
 
 GLOBAL
     : '@' '@' ( ID ( '.' ID )? )? ;
