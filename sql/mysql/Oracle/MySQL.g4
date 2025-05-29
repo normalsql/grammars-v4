@@ -175,8 +175,6 @@ statement
     | 'CHANGE' ('MASTER' | 'REPLICATION' 'SOURCE') 'TO' sourceDefinitions channel?
     | 'RESET' resetOption (',' resetOption)*
     | 'RESET' 'PERSIST' ( exists? qname )?
-    | 'START' replica replicaThreadOptions? ('UNTIL' replicaUntil)? userOption? passwordOption? defaultAuthOption? pluginDirOption? channel?
-    | 'STOP' replica replicaThreadOptions? channel?
     | 'CHANGE' 'REPLICATION' 'FILTER' filterDefinition ( ',' filterDefinition )* channel?
 //    | 'LOAD' ('DATA' | 'TABLE' qname) 'FROM' 'MASTER'
     | ('START' groupReplicationStartOptions? | 'STOP') 'GROUP_REPLICATION'
@@ -215,55 +213,68 @@ statement
     | 'IMPORT' 'TABLE' 'FROM' strings
 
 
+    | 'SHOW' 'BINARY' 'LOG' 'STATUS'
+    | 'SHOW' ('BINARY' | 'MASTER') 'LOGS'
+    | 'SHOW' 'BINLOG' 'EVENTS' ('IN' string)? ( 'FROM' DECIMAL )? limit? channel?
+    | 'SHOW' charset3 like?
+    | 'SHOW' 'COLLATION' like?
+    | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? ('COLUMNS' | 'FIELDS' ) ('FROM' | 'IN') qname inDb? like?
+    | 'SHOW' 'COUNT' '(' '*' ')' ('WARNINGS' | 'ERRORS')
+
+    | 'SHOW' 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? qname
+    | 'SHOW' 'CREATE' 'EVENT' qname
+    | 'SHOW' 'CREATE' 'FUNCTION' qname
+    // ??
+    | 'SHOW' 'CREATE' 'FUNCTION' 'CODE' qname
+    // 'LIBRARY'
+    | 'SHOW' 'CREATE' 'PROCEDURE' qname
+    | 'SHOW' 'CREATE' 'PROCEDURE' 'CODE' qname
+    | 'SHOW' 'CREATE' 'TABLE' qname
+    | 'SHOW' 'CREATE' 'TRIGGER' qname
+    | 'SHOW' 'CREATE' 'USER' user
+    | 'SHOW' 'CREATE' 'VIEW' qname
+
     | 'SHOW' 'DATABASES' like?
+    | 'SHOW' 'ENGINE' qname ('LOGS' | 'MUTEX' | 'STATUS')
+    | 'SHOW' 'STORAGE'? 'ENGINES'
+    | 'SHOW' 'ERRORS' limit?
     | 'SHOW' 'EVENTS' inDb? like?
-    | 'SHOW' 'FULL'? 'TRIGGERS' inDb? like?
-    | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? 'TABLES' inDb? like?
-    | 'SHOW' 'TABLE' 'STATUS' inDb? like?
+    | 'SHOW' 'FUNCTION' 'CODE' qname
+    | 'SHOW' 'FUNCTION' 'STATUS' like?
+    | 'SHOW' 'GRANTS' ('FOR' user ('USING' user (',' user)*)?)?
+    | 'SHOW' 'EXTENDED'? ('INDEX' | 'INDEXES' | 'KEYS') ('FROM' | 'IN') qname inDb? where?
+// | show_library_status_stmt
     | 'SHOW' 'OPEN' 'TABLES' inDb? like?
     | 'SHOW' 'PARSE_TREE' statement
     | 'SHOW' 'PLUGINS'
-    | 'SHOW' ('BINARY' | 'MASTER') 'LOGS'
-    | 'SHOW' 'BINARY' 'LOG' 'STATUS'
-    | 'SHOW' 'ENGINE' qname ('LOGS' | 'MUTEX' | 'STATUS')
-    | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? ('COLUMNS' | 'FIELDS' ) ('FROM' | 'IN') qname inDb? like?
-    | 'SHOW' (replica 'HOSTS' | 'REPLICAS')
-    | 'SHOW' 'BINLOG' 'EVENTS' ('IN' string)? ( 'FROM' DECIMAL )? limit? channel?
-    | 'SHOW' 'RELAYLOG' 'EVENTS' ('IN' string)? ( 'FROM' DECIMAL )? limit? channel?
-    | 'SHOW' 'EXTENDED'? ('INDEX' | 'INDEXES' | 'KEYS') ('FROM' | 'IN') qname inDb? where?
-    | 'SHOW' 'STORAGE'? 'ENGINES'
-    | 'SHOW' 'COUNT' '(' '*' ')' ('WARNINGS' | 'ERRORS')
-    | 'SHOW' ('WARNINGS' | 'ERRORS') limit?
-    | 'SHOW' 'PROFILES'
-    | 'SHOW' 'PROFILE' (profileDefinition (',' profileDefinition)*)? ( 'FOR' 'QUERY' DECIMAL )? limit?
-    | 'SHOW' scope? 'STATUS' like?
-    | 'SHOW' 'FULL'? 'PROCESSLIST'
-    | 'SHOW' scope? 'VARIABLES' like?
-    | 'SHOW' charset3 like?
-    | 'SHOW' 'COLLATION' like?
     | 'SHOW' 'PRIVILEGES'
-    | 'SHOW' 'GRANTS' ('FOR' user ('USING' user (',' user)*)?)?
-    | 'SHOW' 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? qname
-    | 'SHOW' 'CREATE' 'TABLE' qname
-    | 'SHOW' 'CREATE' 'VIEW' qname
-    | 'SHOW' 'MASTER' 'STATUS'
-    | 'SHOW' replica 'STATUS' channel?
-    | 'SHOW' 'CREATE' 'PROCEDURE' qname
-    | 'SHOW' 'CREATE' 'FUNCTION' qname
-    | 'SHOW' 'CREATE' 'TRIGGER' qname
+    | 'SHOW' 'PROCEDURE' 'CODE' qname
     | 'SHOW' 'PROCEDURE' 'STATUS' like?
-    | 'SHOW' 'FUNCTION' 'STATUS' like?
-    | 'SHOW' 'CREATE' 'PROCEDURE' 'CODE' qname
-    | 'SHOW' 'CREATE' 'FUNCTION' 'CODE' qname
-    | 'SHOW' 'CREATE' 'EVENT' qname
-    | 'SHOW' 'CREATE' 'USER' user
+    | 'SHOW' 'FULL'? 'PROCESSLIST'
+    | 'SHOW' 'PROFILE' (profileDefinition (',' profileDefinition)*)? ( 'FOR' 'QUERY' DECIMAL )? limit?
+    | 'SHOW' 'PROFILES'
+    | 'SHOW' 'RELAYLOG' 'EVENTS' ('IN' string)? ( 'FROM' DECIMAL )? limit? channel?
+    | 'SHOW' replica 'STATUS' channel?
+    | 'SHOW' (replica 'HOSTS' | 'REPLICAS')
+    | 'SHOW' scope? 'STATUS' like?
+    | 'SHOW' 'TABLE' 'STATUS' inDb? like?
+    | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? 'TABLES' inDb? like?
+    | 'SHOW' 'FULL'? 'TRIGGERS' inDb? like?
+    | 'SHOW' scope? 'VARIABLES' like?
+    | 'SHOW' 'WARNINGS' limit?
+
+
+    | 'SHUTDOWN'
+    | ( 'SIGNAL' signalCondition | 'RESIGNAL' signalCondition? ) ( 'SET' signalItem (',' signalItem)* )?
+    | 'START' 'TRANSACTION' ('WITH' 'CONSISTENT' 'SNAPSHOT' | accessMode )*
+    | 'START' replica replicaThreadOptions? ('UNTIL' replicaUntil)? userOption? passwordOption? defaultAuthOption? pluginDirOption? channel?
+    | 'STOP' replica replicaThreadOptions? channel?
 
     | 'BINLOG' string
     | 'CACHE' 'INDEX' keyCacheListOrParts 'IN' qname
     | 'FLUSH' noLogging? ( flushTables | flushOption (',' flushOption)* )
     | 'KILL' ('CONNECTION' | 'QUERY')? term
     | 'LOAD' 'INDEX' 'INTO' 'CACHE' preloadTail
-    | 'SHUTDOWN'
 
     | 'CREATE' 'LIBRARY' qname 'LANGUAGE' name ( 'COMMENT' string )? 'AS' string
 
@@ -273,7 +284,6 @@ statement
     | 'USE' name
     | 'RESTART'
     | 'GET' ('CURRENT' | 'STACKED')? 'DIAGNOSTICS' ( statementInformationItem (',' statementInformationItem)* | 'CONDITION' literal conditionInformationItem ( ',' conditionInformationItem )* )
-    | ( 'SIGNAL' signalCondition | 'RESIGNAL' signalCondition? ) ( 'SET' signalItem (',' signalItem)* )?
     | beginWork
     ;
 
@@ -829,7 +839,7 @@ sourceDefinition
     | ('MASTER_SSL_CRLPATH' | 'SOURCE_SSL_CRLPATH') '=' string
     | ('MASTER_PUBLIC_KEY_PATH' | 'SOURCE_PUBLIC_KEY_PATH') '=' string
     | ('GET_MASTER_PUBLIC_KEY' | 'GET_SOURCE_PUBLIC_KEY') '=' DECIMAL
-    | ('MASTER_HEARTBEAT_PERIOD' | 'SOURCE_HEARTBEAT_PERIOD') '=' DECIMAL
+    | ('MASTER_HEARTBEAT_PERIOD' | 'SOURCE_HEARTBEAT_PERIOD') '=' literal
     | 'IGNORE_SERVER_IDS' '=' '(' (DECIMAL (',' DECIMAL)*)? ')'
     | ('MASTER_COMPRESSION_ALGORITHM' | 'SOURCE_COMPRESSION_ALGORITHM') '=' string
     | ('MASTER_ZSTD_COMPRESSION_LEVEL' | 'SOURCE_ZSTD_COMPRESSION_LEVEL') '=' DECIMAL
