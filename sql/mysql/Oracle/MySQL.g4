@@ -52,6 +52,7 @@ statements
     : statement? ( ';' statement? )* EOF ;
 
 // TODO: inlining all the statements for now. will re-refactor as needed.
+// TODO: update: matching order from sql_yacc.yy, because I'm getting cross-eyed
 
 statement
     : 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? name databaseOption*
@@ -155,7 +156,6 @@ statement
     | replace
     | select
     | updateStatement
-    | 'START' 'TRANSACTION' ('WITH' 'CONSISTENT' 'SNAPSHOT' | accessMode )*
     | 'COMMIT' 'WORK'? ('AND' 'NO'? 'CHAIN')? ( 'NO'? 'RELEASE' )?
     | 'SAVEPOINT' qname
     | 'ROLLBACK' 'WORK'? ( 'TO' 'SAVEPOINT'? name | ('AND' 'NO'? 'CHAIN')? ('NO'? 'RELEASE')? )
@@ -192,17 +192,17 @@ statement
     | revokeStatement
     | setRoleStatement
     | 'ANALYZE' noLogging? ( 'TABLE' | 'TABLES' ) qname (',' qname)* histogram?
-    | 'CHECK' 'TABLE' qname (',' qname)* checkOption*
+    | 'CHECK' ( 'TABLE' | 'TABLES' ) qname (',' qname)* checkOption*
     | 'CHECKSUM' 'TABLE' qname (',' qname)* ( 'QUICK' | 'EXTENDED' )?
     | 'OPTIMIZE' noLogging? 'TABLE' qname (',' qname)*
     | 'REPAIR' noLogging? 'TABLE' qname (',' qname)* repairType*
     | 'UNINSTALL' ( 'PLUGIN' name | 'COMPONENT' string (',' string)* )
     | 'INSTALL' 'PLUGIN' name 'SONAME' string
-    | 'INSTALL' 'COMPONENT' strings ('SET' installSetValue ( ',' installSetValue )*)?
+    | 'INSTALL' 'COMPONENT' strings ('SET' setter ( ',' setter )*)?
 
 //    | 'SET' optionValueNoOptionType (',' (scope 'DEFAULT'? qname equal term | optionValueNoOptionType))*
 //    | 'SET' scope? qname equal term (',' scope? qname equal term )*
-    | 'SET' setVariable (',' setVariable )*
+    | 'SET' setter (',' setter )*
     | 'SET' 'NAMES' ( equal term | qname collate? | 'DEFAULT' )
     | 'SET' ('GLOBAL' | 'SESSION')? 'TRANSACTION' transactionCharacteristics ( ',' transactionCharacteristics )*
 //    | 'SET' scope? 'DEFAULT'? qname equal term (',' (scope 'DEFAULT'? qname equal term | optionValueNoOptionType))*
@@ -551,7 +551,7 @@ loadData
       fields?
       lines?
       ( 'IGNORE' DECIMAL ( 'LINES' | 'ROWS' ))?
-      ( '(' (name ( ',' name )* )? ')' )?
+      ( '(' ( qname ( ',' qname )* )? ')' )?
       ( 'SET' setter (',' setter)* )?
 //      ('PARALLEL' '=' INTEGER)? ('MEMORY' '=' byteSize)? ('ALGORITHM' '=' 'BULK')?
     ;
@@ -590,7 +590,7 @@ loadXML
 
 select
     : with? selectCore ( ( 'UNION' | 'EXCEPT' | 'INTERSECT' ) ('DISTINCT' | 'ALL')? selectCore )*
-      orderBy? limit? /* into? */ locking* into?
+      orderBy? limit? into? locking* into?
     ;
 
 selectCore
@@ -600,7 +600,6 @@ selectCore
     | 'TABLE' qname
     | '(' select ')'
     ;
-
 
 modifier
     : 'ALL' | 'DISTINCT' | 'DISTINCTROW'
@@ -614,12 +613,10 @@ modifier
     ;
 
 limit
-    : 'LIMIT' literal ((',' | 'OFFSET') literal)?
-    ;
+    : 'LIMIT' literal ((',' | 'OFFSET') literal)? ;
 
 limitCount
-    : 'LIMIT' DECIMAL
-    ;
+    : 'LIMIT' DECIMAL ;
 
 into
     : 'INTO'
@@ -635,20 +632,17 @@ into
 //    ;
 
 having
-    : 'HAVING' term
-    ;
+    : 'HAVING' term ;
 
 qualify
-    : 'QUALIFY' term
-    ;
+    : 'QUALIFY' term ;
 
 window
     : 'WINDOW' windowDefinition (',' windowDefinition)*
     ;
 
 windowDefinition
-    : name 'AS' windowSpec
-    ;
+    : name 'AS' windowSpec ;
 
 windowSpec
     : '(' name? ('PARTITION' 'BY' orderExpression (',' orderExpression)*)? orderBy?
@@ -867,7 +861,10 @@ filterDefinition
     ;
 
 replicaUntil
-    : ( sourceFileDef | ('SQL_BEFORE_GTIDS' | 'SQL_AFTER_GTIDS') '=' string | 'SQL_AFTER_MTS_GAPS' ) (',' sourceFileDef)*
+    : sourceFileDef
+    | 'SQL_BEFORE_GTIDS' '=' string
+    | 'SQL_AFTER_GTIDS' '=' string
+    | 'SQL_AFTER_MTS_GAPS'
     ;
 
 userOption
@@ -906,13 +903,10 @@ groupReplicationStartOption
     ;
 
 replica
-    : 'SLAVE' | 'REPLICA'
-    ;
+    : 'SLAVE' | 'REPLICA' ;
 
 ssl
-    : 'REQUIRE' 'NO'? 'SSL'
-    ;
-
+    : 'REQUIRE' 'NO'? 'SSL' ;
 
 //alterUser
 //    : oldAlterUser
@@ -961,7 +955,6 @@ resourceOption
         ) DECIMAL
       )+ ;
 
-
 passwordOption2
   : 'PASSWORD' 'EXPIRE' ( 'DEFAULT' | 'NEVER' | 'INTERVAL' DECIMAL 'DAY' )?
   | 'PASSWORD' 'HISTORY' ( 'DEFAULT' | DECIMAL )
@@ -986,8 +979,6 @@ tlsOption
     | 'X509'
     | ('CIPHER' | 'ISSUER' | 'SUBJECT') string
     ;
-
-
 
 grantStatement
     : 'GRANT' roleOrPrivilegesList 'TO' user (',' user)* ( 'WITH' 'ADMIN' 'OPTION' )?
@@ -1361,21 +1352,21 @@ udfExpr
 castType
     : 'BINARY' ('(' DECIMAL ')')?
 //    | 'CHAR' ('(' INTEGER ')')? charsetWithOptBinary?
-    | 'CHAR' ('(' DECIMAL ')')? charset3? 'BINARY'?
+    | 'CHAR' ('(' DECIMAL ')')? ( charset3 name )? 'BINARY'?
+    | ('NCHAR' | 'NATIONAL' 'CHAR') ('(' DECIMAL ')')?
+    | 'SIGNED' ( 'INT' | 'INTEGER' )?
+    | 'UNSIGNED' ( 'INT' | 'INTEGER' )?
     | 'DATE'
+    | 'YEAR'
+    | 'TIME' ('(' DECIMAL ')')?
     | 'DATETIME' ('(' DECIMAL ')')?
     | ('DEC' | 'DECIMAL' ) floatOptions?
-    | 'DOUBLE' 'PRECISION'?
 //    | 'DOUBLE'
-    | 'FLOAT' floatOptions?
     | 'JSON'
-    | ('NCHAR' | 'NATIONAL' 'CHAR') ('(' DECIMAL ')')?
     | 'REAL'
-    | 'SIGNED' ( 'INT' | 'INTEGER' )?
-    | 'TIME' ('(' DECIMAL ')')?
-    | 'UNSIGNED' ( 'INT' | 'INTEGER' )?
-    | 'YEAR'
+    | 'DOUBLE' 'PRECISION'?
 
+    | 'FLOAT' floatOptions?
     | 'POINT'
     | 'LINESTRING'
     | 'POLYGON'
@@ -1383,11 +1374,60 @@ castType
     | 'MULTILINESTRING'
     | 'MULTIPOLYGON'
     | 'GEOMETRYCOLLECTION'
+    | 'GEOMCOLLECTION'
     ;
 
-// TODO merge dataType and castType rules?
 dataType
-    : ( 'INT' | 'INTEGER' | 'TINYINT' | 'SMALLINT' | 'MEDIUMINT' | 'BIGINT' ) ('(' ( DECIMAL | FLOAT ) ')')? fieldOptions?
+    : ( 'INT' | 'INTEGER' | 'TINYINT' | 'SMALLINT' | 'MEDIUMINT' | 'BIGINT' ) ( '(' ( DECIMAL | FLOAT ) ')' )? fieldOptions?
+    | ( 'REAL' | 'DOUBLE' 'PRECISION'? ) ( '(' DECIMAL ',' DECIMAL ')' )? fieldOptions?
+    | ( 'FLOAT' | 'DEC' | 'DECIMAL' | 'NUMERIC' | 'FIXED' ) floatOptions? fieldOptions?
+    | 'BIT' ( '(' ( DECIMAL | FLOAT ) ')' )?
+    | 'BOOL'
+    | 'BOOLEAN'
+    | ( ( 'CHAR' | 'CHARACTER' ) 'VARYING'?
+      | 'NATIONAL' ( 'CHAR' | 'CHARACTER' ) 'VARYING'?
+      | 'NATIONAL'? 'VARCHAR'
+      | 'NVARCHAR'
+      | 'NCHAR' ( 'VARCHAR' | 'VARYING' )?
+      ) ('(' ( DECIMAL | FLOAT ) ')')? characterType?
+
+    | 'BINARY' ('(' ( DECIMAL | FLOAT ) ')')?
+
+    | 'VARBINARY' ('(' ( DECIMAL | FLOAT ) ')')
+    | 'VECTOR' ('(' DECIMAL ')')?
+
+    | 'YEAR' ('(' ( DECIMAL | FLOAT ) ')')? fieldOptions?
+    | 'DATE'
+    | 'TIME' ('(' DECIMAL ')')?
+    | 'TIMESTAMP' ('(' DECIMAL ')')?
+    | 'DATETIME' ('(' DECIMAL ')')?
+    | 'TINYBLOB'
+    | 'BLOB' ('(' ( DECIMAL | FLOAT ) ')')?
+
+    | 'GEOMETRY'
+    | 'GEOMETRYCOLLECTION'
+    | 'GEOMCOLLECTION'
+    | 'POINT'
+    | 'MULTIPOINT'
+    | 'LINESTRING'
+    | 'MULTILINESTRING'
+    | 'POLYGON'
+    | 'MULTIPOLYGON'
+
+    | 'MEDIUMBLOB'
+    | 'LONGBLOB'
+    | 'LONG' 'VARBINARY'
+    | 'LONG' ('CHAR' 'VARYING' | 'VARCHAR')? characterType?
+    | 'TINYTEXT' characterType?
+    | 'TEXT' ('(' ( DECIMAL | FLOAT ) ')')? characterType?
+    | 'MEDIUMTEXT' characterType?
+    | 'LONGTEXT' characterType?
+    | 'ENUM' '(' term ( ',' term )* ')' characterType?
+    | 'SET' '(' string (',' string)* ')' characterType?
+    | 'LONG' characterType?
+    | 'SERIAL'
+    | 'JSON'
+
     | 'FLOAT4'
     | 'FLOAT8'
     | 'INT1'
@@ -1396,44 +1436,7 @@ dataType
     | 'INT4'
     | 'INT8'
     | 'MIDDLEINT'
-    | ('REAL' | 'DOUBLE' 'PRECISION'?) floatOptions? fieldOptions?
-    | ('FLOAT' | 'DEC' | 'DECIMAL' | 'NUMERIC' | 'FIXED') floatOptions? fieldOptions?
-    | 'BIT' ('(' ( DECIMAL | FLOAT ) ')')?
-    | ('BOOL' | 'BOOLEAN')
-    | ('NCHAR' | 'NATIONAL' 'CHAR') ('(' ( DECIMAL | FLOAT ) ')')? 'BINARY'?
-    | 'BINARY' ('(' ( DECIMAL | FLOAT ) ')')?
-//    | (( 'CHAR' | 'CHARACTER' ) 'VARYING'? | 'VARCHAR' ) ('(' ( DECIMAL | FLOAT ) ')')? charsetWithOptBinary?
-    | (( 'CHAR' | 'CHARACTER' ) 'VARYING'? | 'VARCHAR' ) ('(' ( DECIMAL | FLOAT ) ')')? charsetWithOptBinary?
-    | ( 'NATIONAL' 'VARCHAR' | 'NVARCHAR' | 'NCHAR' 'VARCHAR' | 'NATIONAL' 'CHAR' 'VARYING' | 'NCHAR' 'VARYING' ) '(' ( DECIMAL | FLOAT ) ')' 'BINARY'?
-    | 'VARBINARY' ('(' ( DECIMAL | FLOAT ) ')')?
-    | 'YEAR' ('(' ( DECIMAL | FLOAT ) ')')? fieldOptions?
-    | 'DATE'
-    | 'TIME' ('(' DECIMAL ')')? // fsp 0-6
-    | 'TIMESTAMP' ('(' DECIMAL ')')? // fsp 0-6
-    | 'DATETIME' ('(' DECIMAL ')')? // fsp 0-6
-    | 'TINYBLOB'
-    | 'BLOB' ('(' ( DECIMAL | FLOAT ) ')')?
-    | 'MEDIUMBLOB'
-    | 'LONGBLOB'
-    | 'LONG' 'VARBINARY'
-    | 'LONG' ('CHAR' 'VARYING' | 'VARCHAR')? charsetWithOptBinary?
-    | 'TINYTEXT' charsetWithOptBinary?
-    | 'TEXT' ('(' ( DECIMAL | FLOAT ) ')')? charsetWithOptBinary?
-    | 'MEDIUMTEXT' charsetWithOptBinary?
-    | 'LONGTEXT' charsetWithOptBinary?
-    | 'ENUM' '(' term ( ',' term )* ')' charsetWithOptBinary?
-    | 'SET' '(' string (',' string)* ')' charsetWithOptBinary?
-    | 'SERIAL'
-    | 'JSON'
-    | 'GEOMETRY'
-    | 'GEOMETRYCOLLECTION'
-    | 'POINT'
-    | 'MULTIPOINT'
-    | 'LINESTRING'
-    | 'MULTILINESTRING'
-    | 'POLYGON'
-    | 'MULTIPOLYGON'
-    | 'VECTOR' ('(' DECIMAL ')')?
+
     ;
 
 
@@ -1653,12 +1656,10 @@ fieldOptions
     : ('SIGNED' | 'UNSIGNED' | 'ZEROFILL')+
     ;
 
-charsetWithOptBinary
-    : ('ASCII' 'BINARY'? | 'BINARY' 'ASCII')
-    | ('UNICODE' 'BINARY'? | 'BINARY' 'UNICODE')
-    | 'BYTE'
-    | charset 'BINARY'?
-    | 'BINARY' charset?
+characterType
+    : 'BYTE'
+    | 'BINARY' ( 'ASCII' | charset | 'UNICODE' )?
+    | 'BINARY'? ( 'ASCII' | charset | 'UNICODE' )
     ;
 
 tableOption
@@ -1692,7 +1693,7 @@ tableOption
     | 'STATS_SAMPLE_PAGES' '='? ternaryOption
     | 'TABLESPACE' '='? name
     | 'STORAGE' ('DISK' | 'MEMORY')
-//    | 'SECONDARY_ENGINE' equal? name
+    | 'SECONDARY_ENGINE' equal? name
     | 'UNION' '='? '(' qname (',' qname)* ')'
 //    | 'TABLE_CHECKSUM' '='? INTEGER
     ;
@@ -1716,9 +1717,7 @@ partitionBy
     ;
 
 subpartitionBy
-    : 'SUBPARTITION' 'BY' hash
-      ('SUBPARTITIONS' DECIMAL)?
-    ;
+    : 'SUBPARTITION' 'BY' hash ( 'SUBPARTITIONS' DECIMAL )? ;
 
 hash
     : 'LINEAR'?
@@ -1783,17 +1782,6 @@ schemaIdentifierPair
 setter
     : scope? qname equal? term
     ;
-
-// TODO replace w/ setter
-installSetValue
-    : setter
-//    : ('GLOBAL' | 'PERSIST')? 'DEFAULT'? qname equal term
-    ;
-
-setVariable
-//  : ( scope? qname | LOCAL | GLOBAL ) equal term ;
-    : setter ;
-
 
 fields
     : ( 'FIELDS' | 'COLUMNS' )
@@ -1936,9 +1924,13 @@ datetime
     : ( 'DATE' | 'TIME' | 'TIMESTAMP' ) string ;
 
 floatOptions
-    : '(' ( DECIMAL | FLOAT ) ')'
-    | '(' DECIMAL ',' DECIMAL ')'
+    : typeLength
+    | typePrecision
     ;
+
+typePrecision : '(' DECIMAL ',' DECIMAL ')' ;
+
+typeLength : '(' ( DECIMAL | FLOAT ) ')' ;
 
 name
     : ID
@@ -2186,6 +2178,7 @@ keyword
     | 'GENERATED'
     | 'GEOMETRY'
     | 'GEOMETRYCOLLECTION'
+    | 'GEOMCOLLECTION'
     | 'GET'
     | 'GET_FORMAT'
     | 'GET_MASTER_PUBLIC_KEY'
@@ -2773,12 +2766,12 @@ NOPE options { caseInsensitive = false; }
     : '\\N' ;
 
 MYSQL_COMMENT
-    : '/*!' .*? '*/' -> channel(HIDDEN);
+    : '/*!' ( BLOCK_COMMENT | . )*?  '*/' -> channel(HIDDEN);
 //    : '/*' .*? '*/' -> channel(HIDDEN);
 
 BLOCK_COMMENT
 // Nested block comments. Useful, but incorrect.
-    : '/*' ~[!] ( MYSQL_COMMENT | . )*? '*/' -> channel(HIDDEN);
+    : '/*' ~[!] .*? '*/' -> channel(HIDDEN);
 //    : '/*' ~[!] .*? '*/' -> channel(HIDDEN);
 //    : '/*' ( MYSQL_COMMENT | .*? ) '*/' -> channel(HIDDEN);
 
