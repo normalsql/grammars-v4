@@ -1212,7 +1212,8 @@ term
     | 'BINARY' term
     | 'CAST' '(' term 'AS' castType 'ARRAY'? ')'
     | 'CAST' '(' term 'AT' 'TIME' 'ZONE' 'INTERVAL'? string 'AS' 'DATETIME' '(' DECIMAL ')' ')'
-    | 'CONVERT' '(' term ',' castType ')'
+//    | 'CONVERT' '(' term ',' castType ')'
+    | 'CONVERT' '(' term ',' dataType ')'
     | 'CONVERT' '(' term 'USING' name ')'
 
     | term 'COLLATE' name
@@ -1404,7 +1405,7 @@ dataType
       | 'NATIONAL'? 'VARCHAR'
       | 'NVARCHAR'
       | 'NCHAR' ( 'VARCHAR' | 'VARYING' )?
-      ) ('(' ( DECIMAL | FLOAT ) ')')? characterType?
+      ) ('(' ( DECIMAL | FLOAT ) ')')? characterType*
 
     | 'BINARY' ('(' ( DECIMAL | FLOAT ) ')')?
 
