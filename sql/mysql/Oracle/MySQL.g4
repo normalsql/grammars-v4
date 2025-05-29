@@ -87,7 +87,7 @@ statement
     | 'DROP' 'ROLE' exists? roleList
 
     | 'CREATE' 'SERVER' qname 'FOREIGN' 'DATA' 'WRAPPER' qname 'OPTIONS' '(' serverOption (',' serverOption)* ')'
-    | 'ALTER' 'SERVER' qname 'OPTIONS' '(' serverOption (',' serverOption)* ')'
+    | 'ALTER' 'SERVER' qname 'OPTIONS' '(' serverOption ( ',' serverOption )* ')'
     | 'DROP' 'SERVER' exists? name
 
 
@@ -214,19 +214,21 @@ statement
 
 
     | 'SHOW' 'BINARY' 'LOG' 'STATUS'
-    | 'SHOW' ('BINARY' | 'MASTER') 'LOGS'
-    | 'SHOW' 'BINLOG' 'EVENTS' ('IN' string)? ( 'FROM' DECIMAL )? limit? channel?
+//    | 'SHOW' ('BINARY' | 'MASTER') 'LOGS'
+    | 'SHOW' 'BINARY' 'LOGS'
+    | 'SHOW' 'BINLOG' 'EVENTS' ('IN' string)? ( 'FROM' DECIMAL )? limit?
     | 'SHOW' charset3 like?
     | 'SHOW' 'COLLATION' like?
-    | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? ('COLUMNS' | 'FIELDS' ) ('FROM' | 'IN') qname inDb? like?
-    | 'SHOW' 'COUNT' '(' '*' ')' ('WARNINGS' | 'ERRORS')
+//    | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? ('COLUMNS' | 'FIELDS' ) ('FROM' | 'IN') qname inDb? like?
+    | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? ( 'COLUMNS' | 'FIELDS' ) inDb inDb? like?
+    | 'SHOW' 'COUNT' '(' '*' ')' ( 'WARNINGS' | 'ERRORS' )
 
     | 'SHOW' 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? qname
     | 'SHOW' 'CREATE' 'EVENT' qname
     | 'SHOW' 'CREATE' 'FUNCTION' qname
     // ??
     | 'SHOW' 'CREATE' 'FUNCTION' 'CODE' qname
-    // 'LIBRARY'
+    | 'SHOW' 'CREATE' 'LIBRARY' qname
     | 'SHOW' 'CREATE' 'PROCEDURE' qname
     | 'SHOW' 'CREATE' 'PROCEDURE' 'CODE' qname
     | 'SHOW' 'CREATE' 'TABLE' qname
@@ -241,9 +243,9 @@ statement
     | 'SHOW' 'EVENTS' inDb? like?
     | 'SHOW' 'FUNCTION' 'CODE' qname
     | 'SHOW' 'FUNCTION' 'STATUS' like?
-    | 'SHOW' 'GRANTS' ('FOR' user ('USING' user (',' user)*)?)?
-    | 'SHOW' 'EXTENDED'? ('INDEX' | 'INDEXES' | 'KEYS') ('FROM' | 'IN') qname inDb? where?
-// | show_library_status_stmt
+    | 'SHOW' 'GRANTS' ( 'FOR' user ( 'USING' user ( ',' user )* )? )?
+    | 'SHOW' 'EXTENDED'? ( 'KEYS' | 'INDEX' | 'INDEXES' ) inDb inDb? where?
+    | 'SHOW' 'LIBRARY' 'STATUS' like?
     | 'SHOW' 'OPEN' 'TABLES' inDb? like?
     | 'SHOW' 'PARSE_TREE' statement
     | 'SHOW' 'PLUGINS'
@@ -251,11 +253,12 @@ statement
     | 'SHOW' 'PROCEDURE' 'CODE' qname
     | 'SHOW' 'PROCEDURE' 'STATUS' like?
     | 'SHOW' 'FULL'? 'PROCESSLIST'
-    | 'SHOW' 'PROFILE' (profileDefinition (',' profileDefinition)*)? ( 'FOR' 'QUERY' DECIMAL )? limit?
+    | 'SHOW' 'PROFILE' (profileDef (',' profileDef)*)? ( 'FOR' 'QUERY' DECIMAL )? limit?
     | 'SHOW' 'PROFILES'
     | 'SHOW' 'RELAYLOG' 'EVENTS' ('IN' string)? ( 'FROM' DECIMAL )? limit? channel?
-    | 'SHOW' replica 'STATUS' channel?
-    | 'SHOW' (replica 'HOSTS' | 'REPLICAS')
+    | 'SHOW' 'REPLICA' 'STATUS' channel?
+    | 'SHOW' 'REPLICAS'
+    | 'SHOW' replica 'HOSTS'
     | 'SHOW' scope? 'STATUS' like?
     | 'SHOW' 'TABLE' 'STATUS' inDb? like?
     | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? 'TABLES' inDb? like?
@@ -1105,7 +1108,7 @@ transactionCharacteristics
     ;
 
 accessMode
-    : 'READ' ('WRITE' | 'ONLY') ;
+    : 'READ' ( 'WRITE' | 'ONLY' ) ;
 
 //optionValueNoOptionType
 //    : 'DEFAULT'? qname equal term
@@ -1116,14 +1119,18 @@ accessMode
 //    ;
 
 inDb
-    : ('FROM' | 'IN') name
-    ;
+    : ('FROM' | 'IN') qname ;
 
-profileDefinition
-    : 'BLOCK' 'IO'
+profileDef
+    : 'CPU'
+    | 'MEMORY'
+    | 'BLOCK' 'IO'
     | 'CONTEXT' 'SWITCHES'
     | 'PAGE' 'FAULTS'
-    | ( 'ALL' | 'CPU' | 'IPC' | 'MEMORY' | 'SOURCE' | 'SWAPS' )
+    | 'IPC'
+    | 'SWAPS'
+    | 'SOURCE'
+    | 'ALL'
     ;
 
 keyCacheListOrParts
@@ -1455,7 +1462,7 @@ charset
     ;
 
 charset3
-    : ( 'CHAR' 'SET' | 'CHARACTER' 'SET' | 'CHARSET' )
+    : ( ( 'CHAR' | 'CHARACTER' ) 'SET' | 'CHARSET' )
     ;
 
 //charset2
@@ -1820,6 +1827,8 @@ identified
     | 'IDENTIFIED' 'WITH' name 'BY' 'RANDOM' 'PASSWORD'
     | 'IDENTIFIED' 'WITH' name 'AS' name
     ;
+
+
 
 alterAuthOption
     : 'IDENTIFIED' 'WITH' name ('AS' name)?
