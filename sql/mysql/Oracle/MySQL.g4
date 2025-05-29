@@ -108,24 +108,26 @@ statement
 
     | 'CREATE' 'USER' notExists? createUser (',' createUser)*
       ('DEFAULT' 'ROLE' roleList)? require?
-      resourceOption?
+      resourceWith?
       ( passwordOption2 | lockOption2 )*
       ('COMMENT' string | 'ATTRIBUTE' string )*
 
-    | 'ALTER' 'USER' exists? user alterAuthOption? require? resourceOption?
+    | 'ALTER' 'USER' exists? ( 'USER' '(' ')' | user ) ( DECIMAL 'FACTOR' )?
+
+    | 'ALTER' 'USER' exists? 'USER' '(' ')'
+        ( 'IDENTIFIED' 'BY' string ( 'REPLACE' string )? retainCurrentPassword?
+        | 'DISCARD' 'OLD' 'PASSWORD'
+        )
+
+    | 'ALTER' 'USER' exists? user alterAuthOption? ( ',' user alterAuthOption? )*
+          require?
+          resourceWith?
           ( passwordOption2 | lockOption2 )*
           ('COMMENT' string | 'ATTRIBUTE' string )*
 
-//    | 'ALTER' 'USER' exists?  userFunction
-//        // TODO authOption
-//        ( ('IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' | 'IDENTIFIED' 'BY' qname ) replace? retainCurrentPassword?
-//        | 'DISCARD' 'OLD' 'PASSWORD'
-//        | userRegistration?
-//        )
-//    | 'ALTER' 'USER' exists?  user ( 'DEFAULT' 'ROLE' ('ALL' | 'NONE' | roleList) | userRegistration? )
-    | 'ALTER' 'USER' exists?  user 'DEFAULT' 'ROLE' ('ALL' | 'NONE' | roleList )
+    | 'ALTER' 'USER' exists? user 'DEFAULT' 'ROLE' ('ALL' | 'NONE' | roleList )
 
-    | 'DROP' 'USER' exists? user (',' user)*
+    | 'DROP' 'USER' exists? user ( ',' user )*
     | 'RENAME' 'USER' user 'TO' user ( ',' user 'TO' user )*
 
     | 'CREATE' ('OR' 'REPLACE' viewAlgorithm? | viewAlgorithm)? definer? security? 'VIEW' qname columns? 'AS' select viewCheckOption?
@@ -955,11 +957,7 @@ ssl
 //    | user discardOldPassword?
 //    ;
 
-userFunction
-    : 'USER' '(' ')'
-    ;
-
-resourceOption
+resourceWith
     : 'WITH'
       ( ( 'MAX_QUERIES_PER_HOUR'
         | 'MAX_UPDATES_PER_HOUR'
@@ -1303,7 +1301,7 @@ function
     | 'TIME' '(' term ')'
     | 'TIMESTAMP' '(' term (',' term)? ')'
     | 'TRIM' '(' ( term ('FROM' term)? | 'LEADING' term? 'FROM' term | 'TRAILING' term? 'FROM' term | 'BOTH' term? 'FROM' term ) ')'
-    | userFunction
+    | 'USER' '(' ')'
     | 'VALUES' '(' term ')'
     | 'YEAR' '(' term ')'
 
