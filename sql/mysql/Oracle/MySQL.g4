@@ -71,8 +71,9 @@ statement
     | 'ALTER' 'PROCEDURE' qname routineCreateOption*
     | 'DROP' 'PROCEDURE' exists? qname
 
-    | 'CREATE' ( 'UNIQUE' | 'FULLTEXT' | 'SPATIAL')? 'INDEX' qname ('USING' ('BTREE' | 'HASH'))? 'ON' qname '(' keyPart (',' keyPart)* ')' createIndexOption*
-    | 'DROP' onlineOption? 'INDEX' qname 'ON' qname ('ALGORITHM' '='? qname | 'LOCK' '='? qname)*
+    | 'CREATE' ( 'UNIQUE' | 'FULLTEXT' | 'SPATIAL')? 'INDEX' qname indexType?
+      'ON' qname '(' keyPart ( ',' keyPart )* ')' createIndexOption* ( algorithmName | lockName )*
+    | 'DROP' onlineOption? 'INDEX' qname 'ON' qname ( algorithmName | lockName )*
 
     | 'ALTER' 'LOGFILE' 'GROUP' qname 'ADD' 'UNDOFILE' string alterLogfileGroupOptions?
     | 'CREATE' 'LOGFILE' 'GROUP' qname 'ADD' 'UNDOFILE' string (logfileGroupOption (','? logfileGroupOption)*)?
@@ -283,8 +284,23 @@ statement
 
     | 'CREATE' 'LIBRARY' qname 'LANGUAGE' name ( 'COMMENT' string )? 'AS' string
 
-    | ('EXPLAIN' | 'DESCRIBE' | 'DESC') qname ( string | qname )?
-    | ('EXPLAIN' | 'DESCRIBE' | 'DESC') explainOption? ( 'FOR' ( 'DATABASE' | 'SCHEMA' ) name )? explainableStatement
+    | ('EXPLAIN' | 'DESCRIBE' | 'DESC') qname qname ?
+
+    | ('EXPLAIN' | 'DESCRIBE' | 'DESC')
+      ( 'FORMAT' '=' ( 'TRADITIONAL' | 'JSON' | 'TREE' ) )?
+      ( 'INTO' qname )?
+      ( ( 'FOR' ( 'DATABASE' | 'SCHEMA' ) name )? explainable
+      | 'FOR' 'CONNECTION' DECIMAL
+      )
+
+    | ('EXPLAIN' | 'DESCRIBE' | 'DESC')
+        'ANALYZE' ( 'FORMAT' '=' 'TREE' )? ( 'FOR' ( 'DATABASE' | 'SCHEMA' ) name )? select
+
+    | ('EXPLAIN' | 'DESCRIBE' | 'DESC')
+       'ANALYZE' 'FORMAT' '=' 'JSON'
+       'INTO' qname
+       ( 'FOR' ( 'DATABASE' | 'SCHEMA' ) name )? explainable
+
     | 'HELP' name
     | 'USE' name
     | 'RESTART'
@@ -331,7 +347,7 @@ alterTableAction
     | partitionBy
     | removePartitioning
     | 'DISCARD' 'TABLESPACE' | 'IMPORT' 'TABLESPACE'
-    | 'ADD' 'PARTITION' noLogging? ( '(' partitionDef (',' partitionDef)* ')' | 'PARTITIONS' DECIMAL )
+    | 'ADD' 'PARTITION' ( noLogging? ( '(' partitionDef (',' partitionDef)* ')' | 'PARTITIONS' DECIMAL ))?
     | 'DROP' 'PARTITION' name (',' name)*
     | 'REBUILD' 'PARTITION' noLogging? allOrPartitionNameList
     | 'OPTIMIZE' 'PARTITION' noLogging? allOrPartitionNameList noLogging?
@@ -396,18 +412,24 @@ routineCreateOption
     | 'USING' '(' name ( ',' name )*')'
     ;
 
+indexType
+    : ( 'USING' | 'TYPE' ) ('BTREE' | 'HASH' | 'RTREE' ) ;
+
 createIndexOption
     : 'KEY_BLOCK_SIZE' '='? DECIMAL
-    | ('USING' ('BTREE' | 'HASH'))
+    | indexType
     | 'WITH' 'PARSER' name
     | 'COMMENT' string
     | visibility
     | 'ENGINE_ATTRIBUTE' '='? string
     | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
-    | 'ALGORITHM' '='? name
-    | 'LOCK' '='? name
     ;
 
+lockName
+    : 'LOCK' '='? name ;
+
+algorithmName
+    : 'ALGORITHM' '='? name ;
 
 indexOption
     : 'KEY_BLOCK_SIZE' '='? DECIMAL
@@ -415,14 +437,14 @@ indexOption
     | visibility
     | 'ENGINE_ATTRIBUTE' '='? string
     | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
-    | ('USING' | 'TYPE') indexType
+    | indexType
     | 'WITH' 'PARSER' name
     ;
 
 // TODO verify how this is used. there's overlap with
 indexNameAndType
-    : name ( 'TYPE' indexType )?
-    | name? 'USING' indexType
+    : name indexType?
+    | name? indexType
     ;
 
 logfileGroupOption
@@ -1188,20 +1210,12 @@ resourceGroupEnableDisable
     | 'DISABLE'
     ;
 
-explainOption
-    : 'FORMAT' '=' qname ( 'INTO' qname )?
-    | 'EXTENDED'
-    | 'ANALYZE'
-    | 'ANALYZE' 'FORMAT' '=' qname
-    ;
-
-explainableStatement
+explainable
     : select
     | delete
     | insert
     | replace
     | updateStatement
-    | 'FOR' 'CONNECTION' DECIMAL
     ;
 
 term
@@ -1211,8 +1225,8 @@ term
     | term 'AT' 'LOCAL'
     | 'BINARY' term
     | 'CAST' '(' term 'AS' castType 'ARRAY'? ')'
-    | 'CAST' '(' term 'AT' 'TIME' 'ZONE' 'INTERVAL'? string 'AS' 'DATETIME' '(' DECIMAL ')' ')'
-//    | 'CONVERT' '(' term ',' castType ')'
+    | 'CAST' '(' term 'AT' 'TIME' 'ZONE' 'INTERVAL'? string 'AS' 'DATETIME' ( '(' DECIMAL ')' )? ')'
+    | 'CONVERT' '(' term ',' castType ')'
     | 'CONVERT' '(' term ',' dataType ')'
     | 'CONVERT' '(' term 'USING' name ')'
 
@@ -1365,6 +1379,11 @@ udfExpr
     : term alias?
     ;
 
+castType2
+    : 'SIGNED' ( 'INT' | 'INTEGER' )?
+    | 'UNSIGNED' ( 'INT' | 'INTEGER' )?
+    ;
+
 castType
     : 'BINARY' ('(' DECIMAL ')')?
 //    | 'CHAR' ('(' INTEGER ')')? charsetWithOptBinary?
@@ -1444,14 +1463,14 @@ dataType
     | 'SERIAL'
     | 'JSON'
 
-    | 'FLOAT4'
+    | ('FLOAT4'
     | 'FLOAT8'
     | 'INT1'
     | 'INT2'
     | 'INT3'
     | 'INT4'
     | 'INT8'
-    | 'MIDDLEINT'
+    | 'MIDDLEINT') fieldOptions?
 
     ;
 
@@ -1657,10 +1676,6 @@ referenceOption
 
 keyPart
     : ( name ('(' ( DECIMAL | FLOAT ) ')')? | '(' term ')' ) direction?
-    ;
-
-indexType
-    : 'BTREE' | 'RTREE' | 'HASH'
     ;
 
 visibility
