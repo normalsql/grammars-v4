@@ -1860,7 +1860,7 @@ user
     ;
 
 userName
-    : name qname? ;
+    : name ( '@' | qname )? ;
 
 like
     : 'LIKE' name
@@ -1886,10 +1886,8 @@ columns
     ;
 
 qname
-    : ('.'? name| LOCAL| GLOBAL)  ( '.' name ( '.' name )? )?
-//    : '.'? name ( '.' name ( '.' name )? )?
-//    | LOCAL ( '.' name )?
-//    | GLOBAL ( '.' name )?
+    : ( '.'? name | LOCAL | GLOBAL )
+      ( '.' name ( '.' name )? )?
     ;
 
 literal
