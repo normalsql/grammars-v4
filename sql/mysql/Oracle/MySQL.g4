@@ -196,8 +196,8 @@ statement
     | 'ANALYZE' noLogging? ( 'TABLE' | 'TABLES' ) qname (',' qname)* histogram?
     | 'CHECK' ( 'TABLE' | 'TABLES' ) qname (',' qname)* checkOption*
     | 'CHECKSUM' 'TABLE' qname (',' qname)* ( 'QUICK' | 'EXTENDED' )?
-    | 'OPTIMIZE' noLogging? 'TABLE' qname (',' qname)*
-    | 'REPAIR' noLogging? 'TABLE' qname (',' qname)* repairType*
+    | 'OPTIMIZE' noLogging? ( 'TABLE' | 'TABLES' ) qname (',' qname)*
+    | 'REPAIR' noLogging? ( 'TABLE' | 'TABLES' ) qname (',' qname)* repairType*
     | 'UNINSTALL' ( 'PLUGIN' name | 'COMPONENT' string (',' string)* )
     | 'INSTALL' 'PLUGIN' name 'SONAME' string
     | 'INSTALL' 'COMPONENT' strings ('SET' setter ( ',' setter )*)?
@@ -273,7 +273,7 @@ statement
 
     | 'SHUTDOWN'
     | ( 'SIGNAL' signalCondition | 'RESIGNAL' signalCondition? ) ( 'SET' signalItem (',' signalItem)* )?
-    | 'START' 'TRANSACTION' ('WITH' 'CONSISTENT' 'SNAPSHOT' | accessMode )*
+    | 'START' 'TRANSACTION' (startTransactionMode (',' startTransactionMode)*)?
     | 'START' replica replicaThreadOptions? ('UNTIL' replicaUntil)? userOption? passwordOption? defaultAuthOption? pluginDirOption? channel?
     | 'STOP' replica replicaThreadOptions? channel?
 
@@ -313,6 +313,8 @@ statement
     | 'GET' ('CURRENT' | 'STACKED')? 'DIAGNOSTICS' ( statementInformationItem (',' statementInformationItem)* | 'CONDITION' literal conditionInformationItem ( ',' conditionInformationItem )* )
     | beginWork
     ;
+
+startTransactionMode : ('WITH' 'CONSISTENT' 'SNAPSHOT' | 'READ' ( 'WRITE' | 'ONLY' ) ) ;
 
 
 signalCondition
@@ -415,7 +417,7 @@ routineCreateOption
     | 'READS' 'SQL' 'DATA'
     | 'MODIFIES' 'SQL' 'DATA'
     | security
-    | 'USING' '(' name ( ',' name )*')'
+    | 'USING' '(' qname ( ',' qname )*')'
     ;
 
 indexType
@@ -585,7 +587,9 @@ valuesReference
 
 loadData
     : 'LOAD' 'DATA' ('LOW_PRIORITY' | 'CONCURRENT')?
-      'LOCAL'? ('INFILE' | ('URL' | 'S3')) string
+      'LOCAL'? ('INFILE' | 'URL' | 'S3' ) string
+      ( 'COUNT' DECIMAL )?
+      ( 'IN' 'PRIMARY' 'KEY' 'ORDER' )?
       ( 'REPLACE' | 'IGNORE' )?
       'INTO' 'TABLE' qname
       partition?
@@ -615,9 +619,10 @@ loadData
 
 loadXML
     : 'LOAD' 'XML' ('LOW_PRIORITY' | 'CONCURRENT')? 'LOCAL'?
-      ('INFILE' | ('URL' | 'S3'))? string
+      ('INFILE' | 'URL' | 'S3' )? string
+      ('COUNT' DECIMAL )?
 //      ('COUNT' INTEGER | ID INTEGER)?
-//      ('IN' 'PRIMARY' 'KEY' 'ORDER')?
+      ('IN' 'PRIMARY' 'KEY' 'ORDER')?
       ( 'REPLACE' | 'IGNORE' )?
       'INTO' 'TABLE' qname
 //      partition?
@@ -1130,11 +1135,8 @@ transactionCharacteristics
         | 'READ' ('COMMITTED' | 'UNCOMMITTED')
         | 'SERIALIZABLE'
         )
-    | accessMode
+    | 'READ' ( 'WRITE' | 'ONLY' )
     ;
-
-accessMode
-    : 'READ' ( 'WRITE' | 'ONLY' ) ;
 
 //optionValueNoOptionType
 //    : 'DEFAULT'? qname equal term
@@ -1593,15 +1595,15 @@ handlerCondition
     ;
 
 statementInformationItem
-    : literal '=' ('NUMBER' | 'ROW_COUNT')
+    : qname '=' ('NUMBER' | 'ROW_COUNT')
     ;
 
 conditionInformationItem
-    : literal '=' ( signalName | 'RETURNED_SQLSTATE' )
+    : qname '=' ( signalName | 'RETURNED_SQLSTATE' )
     ;
 
 signalItem
-    : signalName '=' literal
+    : signalName '=' qname
     ;
 
 signalName
@@ -2768,6 +2770,7 @@ GLOBAL
 
 STRING
     : '\'' ('\\'? .)*? '\''
+    | '\'' '\\' '\''
     | '$$' .*? '$$'
     ;
 
@@ -2785,8 +2788,8 @@ ID
 
 
 BLOB
-    : 'x\'' BASE16+ '\''
-    | 'b\'' BASE2+ '\''
+    : 'x\'' BASE16* '\''
+    | 'b\'' BASE2* '\''
     ;
 
 // MySQL synonym for NULL. A separate token from 'NULL'
