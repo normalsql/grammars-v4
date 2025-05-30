@@ -319,7 +319,7 @@ startTransactionMode : ('WITH' 'CONSISTENT' 'SNAPSHOT' | 'READ' ( 'WRITE' | 'ONL
 
 signalCondition
     : name
-    | 'SQLSTATE' 'VALUE'? string
+    | 'SQLSTATE' 'VALUE'? ( name | DECIMAL )
     ;
 
 alterLogfileGroupOptions
@@ -670,8 +670,9 @@ into
     : 'INTO'
         ( 'OUTFILE' string charset? fields? lines?
         | 'DUMPFILE' string
-        | name ( ',' name )*
-        | LOCAL ( ',' LOCAL )*
+        | qname ( ',' qname )*
+//        | name ( ',' name )*
+//        | LOCAL ( ',' LOCAL )*
         )
     ;
 
@@ -1603,7 +1604,7 @@ conditionInformationItem
     ;
 
 signalItem
-    : signalName '=' qname
+    : signalName '=' ( qname | DECIMAL )
     ;
 
 signalName
@@ -2758,7 +2759,6 @@ FLOAT
 SIZE
     : BASE10 [KMGT] ;
 
-// Sometimes a name, sometimes an ID, always a bummer
 QUOTED
     : '"' ('\\'? .)*? '"' ;
 
@@ -2769,8 +2769,8 @@ GLOBAL
     : '@' '@' ( ID ( '.' ID )? )? ;
 
 STRING
-    : '\'' ('\\'? .)*? '\''
-    | '\'' '\\' '\''
+    : '\'' '\\' '\''
+    | '\'' ('\\'? .)*? '\''
     | '$$' .*? '$$'
     ;
 
@@ -2793,7 +2793,7 @@ BLOB
     ;
 
 // MySQL synonym for NULL. A separate token from 'NULL'
-// because I'm not clear where its permitted.
+// because I'm not clear where it's permitted.
 NOPE options { caseInsensitive = false; }
     : '\\N' ;
 
@@ -2802,22 +2802,14 @@ MYSQL_COMMENT
 //    : '/*' .*? '*/' -> channel(HIDDEN);
 
 BLOCK_COMMENT
-// Nested block comments. Useful, but incorrect.
     : '/*' ~[!] .*? '*/' -> channel(HIDDEN);
-//    : '/*' ~[!] .*? '*/' -> channel(HIDDEN);
-//    : '/*' ( MYSQL_COMMENT | .*? ) '*/' -> channel(HIDDEN);
 
-//BLOCK_COMMENT
-//// Nested block comments. Useful, but incorrect.
-//    : '/*' ( BLOCK_COMMENT | ~[*/] | '*' ~'/' )* '*/' -> channel(HIDDEN);
-////    : '/*' .*? '*/' -> channel(HIDDEN);
-//
 // Another MySQL-ism...?
 POUND_COMMENT
     : '#' ~[\n\r]* -> channel(HIDDEN) ;
 
 COMMENT
-    // MySQL requires whitespace before content
+    // MySQL requires whitespace before comment
     : '--' ( [ \t] ~[\n\r]* | [\n\r] | EOF ) -> channel(HIDDEN)
     // Playing around with variations, to see which I prefer.
 //    : '--' ( [ \t] .*? )? ( [\n\r] | EOF ) -> channel(HIDDEN)
