@@ -98,7 +98,7 @@ grammar MySQL;
 
 
 
-/*
+/**
 
    I have no idea how to accomodate MySQL extensions.
    Note: update rule 'keyword' whenever a new
@@ -154,8 +154,8 @@ statement
     | 'ALTER' ( 'DATABASE' | 'SCHEMA' ) qname databaseOption+
     | 'DROP' ( 'DATABASE' | 'SCHEMA' ) exists? qname
 
-    | 'CREATE' definer? 'EVENT' notExists? qname 'ON' 'SCHEDULE' schedule ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ('ENABLE' | 'DISABLE' ('ON' replica)?)? ( 'COMMENT' string )? 'DO' compoundStatement
-    | 'ALTER' definer? 'EVENT' qname ('ON' 'SCHEDULE' schedule)? ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ('RENAME' 'TO' qname)? ( 'ENABLE' | 'DISABLE' ('ON' replica)? )? ('COMMENT' string)? ('DO' compoundStatement)?
+    | 'CREATE' definer? 'EVENT' notExists? qname 'ON' 'SCHEDULE' schedule ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ('ENABLE' | 'DISABLE' ('ON' 'REPLICA')?)? ( 'COMMENT' string )? 'DO' compoundStatement
+    | 'ALTER' definer? 'EVENT' qname ('ON' 'SCHEDULE' schedule)? ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ('RENAME' 'TO' qname)? ( 'ENABLE' | 'DISABLE' ('ON' 'REPLICA')? )? ('COMMENT' string)? ('DO' compoundStatement)?
     | 'DROP' 'EVENT' exists? qname
 
     | 'CREATE' definer? 'FUNCTION' notExists? qname '(' ( functionParameter (',' functionParameter)* )? ')' 'RETURNS' dataType collate? routineCreateOption* storedRoutineBody
@@ -191,6 +191,7 @@ statement
     | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname
        ('(' ( createDef  | tableConstraintDef) (',' ( createDef  | tableConstraintDef))* ')')?
        ( tableOption (','? tableOption)* )? partitionBy? (('REPLACE' | 'IGNORE')? 'AS'? select)?
+
     | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ( 'LIKE' qname | '(' 'LIKE' qname ')' )
     | 'ALTER' onlineOption? 'TABLE' qname ( alterTableAction ( ','? alterTableAction )* )?
     | 'RENAME' ('TABLE' | 'TABLES') renamePair ( ',' renamePair )*
@@ -271,8 +272,8 @@ statement
     | 'XA' 'ROLLBACK' xid
     | 'XA' 'RECOVER' ('CONVERT' 'XID')?
 
-    | 'PURGE' ('BINARY' | 'MASTER') 'LOGS' ( 'TO' string | 'BEFORE' term )
-    | 'CHANGE' ('MASTER' | 'REPLICATION' 'SOURCE') 'TO' sourceDefinition (',' sourceDefinition)* channel?
+    | 'PURGE' 'BINARY' 'LOGS' ( 'TO' string | 'BEFORE' term )
+    | 'CHANGE' 'REPLICATION' 'SOURCE' 'TO' sourceDefinition (',' sourceDefinition)* channel?
     | 'RESET' resetOption (',' resetOption)*
     | 'RESET' 'PERSIST' ( exists? qname )?
     | 'CHANGE' 'REPLICATION' 'FILTER' filterDefinition ( ',' filterDefinition )* channel?
@@ -348,7 +349,7 @@ statement
     | 'SHOW' 'RELAYLOG' 'EVENTS' ('IN' string)? ( 'FROM' DECIMAL )? limit? channel?
     | 'SHOW' 'REPLICA' 'STATUS' channel?
     | 'SHOW' 'REPLICAS'
-    | 'SHOW' replica 'HOSTS'
+    | 'SHOW' 'REPLICA' 'HOSTS'
     | 'SHOW' scope? 'STATUS' like?
     | 'SHOW' 'TABLE' 'STATUS' inDb? like?
     | 'SHOW' ('FULL' | 'EXTENDED' 'FULL'?)? 'TABLES' inDb? like?
@@ -360,8 +361,8 @@ statement
     | 'SHUTDOWN'
     | ( 'SIGNAL' signalCondition | 'RESIGNAL' signalCondition? ) ( 'SET' signalItem (',' signalItem)* )?
     | 'START' 'TRANSACTION' (startTransactionMode (',' startTransactionMode)*)?
-    | 'START' replica replicaThreadOptions? ('UNTIL' replicaUntil)? userOption? passwordOption? defaultAuthOption? pluginDirOption? channel?
-    | 'STOP' replica replicaThreadOptions? channel?
+    | 'START' 'REPLICA' replicaThreadOptions? ('UNTIL' replicaUntil)? userOption? passwordOption? defaultAuthOption? pluginDirOption? channel?
+    | 'STOP' 'REPLICA' replicaThreadOptions? channel?
 
     | 'BINLOG' string
     | 'CACHE' 'INDEX' keyCacheListOrParts 'IN' qname
@@ -882,38 +883,38 @@ xid
     ;
 
 resetOption
-    : ('MASTER' | 'BINARY' 'LOGS' 'AND' 'GTIDS') ('TO' DECIMAL)?
-    | replica 'ALL'? channel?
+    : 'BINARY' 'LOGS' 'AND' 'GTIDS' ('TO' DECIMAL)?
+    | 'REPLICA' 'ALL'? channel?
     ;
 
 sourceDefinition
-    : ('MASTER_HOST' | 'SOURCE_HOST') '=' string
+    : 'SOURCE_HOST' '=' string
     | 'NETWORK_NAMESPACE' '=' string
-    | ('MASTER_BIND' | 'SOURCE_BIND') '=' string
-    | ('MASTER_USER' | 'SOURCE_USER') '=' string
-    | ('MASTER_PASSWORD' | 'SOURCE_PASSWORD') '=' string
-    | ('MASTER_PORT' | 'SOURCE_PORT') '=' DECIMAL
-    | ('MASTER_CONNECT_RETRY' | 'SOURCE_CONNECT_RETRY') '=' DECIMAL
-    | ('MASTER_RETRY_COUNT' | 'SOURCE_RETRY_COUNT') '=' DECIMAL
-    | ('MASTER_DELAY' | 'SOURCE_DELAY') '=' DECIMAL
-    | ('MASTER_SSL' | 'SOURCE_SSL') '=' DECIMAL
-    | ('MASTER_SSL_CA' | 'SOURCE_SSL_CA') '=' string
-    | ('MASTER_SSL_CAPATH' | 'SOURCE_SSL_CAPATH') '=' string
-    | ('MASTER_TLS_VERSION' | 'SOURCE_TLS_VERSION') '=' string
-    | ('MASTER_SSL_CERT' | 'SOURCE_SSL_CERT') '=' string
-    | ('MASTER_TLS_CIPHERSUITES' | 'SOURCE_TLS_CIPHERSUITES') '=' name
-    | ('MASTER_SSL_CIPHER' | 'SOURCE_SSL_CIPHER') '=' string
-    | ('MASTER_SSL_KEY' | 'SOURCE_SSL_KEY') '=' string
-    | ('MASTER_SSL_VERIFY_SERVER_CERT' | 'SOURCE_SSL_VERIFY_SERVER_CERT') '=' DECIMAL
-    | ('MASTER_SSL_CRL' | 'SOURCE_SSL_CRL') '=' string
-    | ('MASTER_SSL_CRLPATH' | 'SOURCE_SSL_CRLPATH') '=' string
-    | ('MASTER_PUBLIC_KEY_PATH' | 'SOURCE_PUBLIC_KEY_PATH') '=' string
-    | ('GET_MASTER_PUBLIC_KEY' | 'GET_SOURCE_PUBLIC_KEY') '=' DECIMAL
-    | ('MASTER_HEARTBEAT_PERIOD' | 'SOURCE_HEARTBEAT_PERIOD') '=' literal
+    | 'SOURCE_BIND' '=' string
+    | 'SOURCE_USER' '=' string
+    | 'SOURCE_PASSWORD' '=' string
+    | 'SOURCE_PORT' '=' DECIMAL
+    | 'SOURCE_CONNECT_RETRY' '=' DECIMAL
+    | 'SOURCE_RETRY_COUNT' '=' DECIMAL
+    | 'SOURCE_DELAY' '=' DECIMAL
+    | 'SOURCE_SSL' '=' DECIMAL
+    | 'SOURCE_SSL_CA' '=' string
+    | 'SOURCE_SSL_CAPATH' '=' string
+    | 'SOURCE_TLS_VERSION' '=' string
+    | 'SOURCE_SSL_CERT' '=' string
+    | 'SOURCE_TLS_CIPHERSUITES' '=' name
+    | 'SOURCE_SSL_CIPHER' '=' string
+    | 'SOURCE_SSL_KEY' '=' string
+    | 'SOURCE_SSL_VERIFY_SERVER_CERT' '=' DECIMAL
+    | 'SOURCE_SSL_CRL' '=' string
+    | 'SOURCE_SSL_CRLPATH' '=' string
+    | 'SOURCE_PUBLIC_KEY_PATH' '=' string
+    | 'GET_SOURCE_PUBLIC_KEY' '=' DECIMAL
+    | 'SOURCE_HEARTBEAT_PERIOD' '=' literal
     | 'IGNORE_SERVER_IDS' '=' '(' (DECIMAL (',' DECIMAL)*)? ')'
-    | ('MASTER_COMPRESSION_ALGORITHM' | 'SOURCE_COMPRESSION_ALGORITHM') '=' string
-    | ('MASTER_ZSTD_COMPRESSION_LEVEL' | 'SOURCE_ZSTD_COMPRESSION_LEVEL') '=' DECIMAL
-    | ('MASTER_AUTO_POSITION' | 'SOURCE_AUTO_POSITION') '=' DECIMAL
+    | 'SOURCE_COMPRESSION_ALGORITHM' '=' string
+    | 'SOURCE_ZSTD_COMPRESSION_LEVEL' '=' DECIMAL
+    | 'SOURCE_AUTO_POSITION' '=' DECIMAL
     | 'PRIVILEGE_CHECKS_USER' '=' userName
     | 'REQUIRE_ROW_FORMAT' '=' DECIMAL
     | 'REQUIRE_TABLE_PRIMARY_KEY_CHECK' '=' ('STREAM' | 'ON' | 'OFF' | 'GENERATE')
@@ -924,8 +925,8 @@ sourceDefinition
     ;
 
 sourceFileDef
-    : ('MASTER_LOG_FILE' | 'SOURCE_LOG_FILE') '=' string
-    | ('MASTER_LOG_POS' | 'SOURCE_LOG_POS') '=' DECIMAL
+    : 'SOURCE_LOG_FILE' '=' string
+    | 'SOURCE_LOG_POS' '=' DECIMAL
     | 'RELAY_LOG_FILE' '=' string
     | 'RELAY_LOG_POS' '=' DECIMAL
     ;
@@ -987,9 +988,6 @@ groupReplicationStartOption
     | 'PASSWORD' '=' string
     | 'DEFAULT_AUTH' '=' string
     ;
-
-replica
-    : 'SLAVE' | 'REPLICA' ;
 
 ssl
     : 'REQUIRE' 'NO'? 'SSL' ;
@@ -1088,7 +1086,7 @@ roleOrPrivilege
     | 'SHOW' 'DATABASES'
     | 'CREATE' ( 'TEMPORARY' 'TABLES' | 'ROUTINE' | 'TABLESPACE' | 'USER' | 'VIEW' )?
     | 'LOCK' 'TABLES'
-    | 'REPLICATION' ('CLIENT' | replica)
+    | 'REPLICATION' ('CLIENT' | 'REPLICA')
     | 'SHOW' 'VIEW'
     | 'ALTER' 'ROUTINE'?
     | ('CREATE' | 'DROP') 'ROLE'
@@ -2149,7 +2147,6 @@ keyword
     | 'GEOMCOLLECTION'
     | 'GET'
     | 'GET_FORMAT'
-    | 'GET_MASTER_PUBLIC_KEY'
     | 'GET_SOURCE_PUBLIC_KEY'
     | 'GLOBAL'
     | 'GRANT'
@@ -2248,33 +2245,6 @@ keyword
     | 'LOOP'
     | 'LOW_PRIORITY'
     | 'MANUAL'
-    | 'MASTER'
-    | 'MASTER_AUTO_POSITION'
-    | 'MASTER_BIND'
-    | 'MASTER_COMPRESSION_ALGORITHM'
-    | 'MASTER_CONNECT_RETRY'
-    | 'MASTER_DELAY'
-    | 'MASTER_HEARTBEAT_PERIOD'
-    | 'MASTER_HOST'
-    | 'MASTER_LOG_FILE'
-    | 'MASTER_LOG_POS'
-    | 'MASTER_PASSWORD'
-    | 'MASTER_PORT'
-    | 'MASTER_PUBLIC_KEY_PATH'
-    | 'MASTER_RETRY_COUNT'
-    | 'MASTER_SSL'
-    | 'MASTER_SSL_CA'
-    | 'MASTER_SSL_CAPATH'
-    | 'MASTER_SSL_CERT'
-    | 'MASTER_SSL_CIPHER'
-    | 'MASTER_SSL_CRL'
-    | 'MASTER_SSL_CRLPATH'
-    | 'MASTER_SSL_KEY'
-    | 'MASTER_SSL_VERIFY_SERVER_CERT'
-    | 'MASTER_TLS_CIPHERSUITES'
-    | 'MASTER_TLS_VERSION'
-    | 'MASTER_USER'
-    | 'MASTER_ZSTD_COMPRESSION_LEVEL'
     | 'MATCH'
     | 'MAX'
     | 'MAX_CONNECTIONS_PER_HOUR'
@@ -2500,7 +2470,6 @@ keyword
     | 'SIGNED'
     | 'SIMPLE'
     | 'SKIP'
-    | 'SLAVE'
     | 'SLOW'
     | 'SMALLINT'
     | 'SNAPSHOT'
