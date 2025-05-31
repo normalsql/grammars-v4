@@ -49,7 +49,7 @@ options {
 }
 
 statements
-    : statement? ( ';' statement? )* EOF ;
+    : statement? ( ( ';' | '#end' ) statement? )* EOF ;
 
 // TODO: inlining all the statements for now. will re-refactor as needed.
 // TODO: update: matching order from sql_yacc.yy, because I'm getting cross-eyed
@@ -94,7 +94,7 @@ statement
 
 
     | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname
-       ('(' (qname columnDef  | tableConstraintDef) (',' (qname columnDef  | tableConstraintDef))* ')')?
+       ('(' ( createDef  | tableConstraintDef) (',' ( createDef  | tableConstraintDef))* ')')?
        ( tableOption (','? tableOption)* )? partitionBy? (('REPLACE' | 'IGNORE')? 'AS'? select)?
     | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ( 'LIKE' qname | '(' 'LIKE' qname ')' )
     | 'ALTER' onlineOption? 'TABLE' qname ( alterTableAction ( ','? alterTableAction )* )?
@@ -328,12 +328,12 @@ alterTableAction
     | 'LOCK' '='? name
     | ('WITH' | 'WITHOUT') 'VALIDATION'
 
-    | 'ADD' 'COLUMN'? name columnDef  place?
-    | 'ADD' 'COLUMN'? '(' (name columnDef | tableConstraintDef) (',' (name columnDef | tableConstraintDef))* ')'
+    | 'ADD' 'COLUMN'?  createDef  place?
+    | 'ADD' 'COLUMN'? '(' ( createDef | tableConstraintDef) (',' ( createDef | tableConstraintDef))* ')'
     | 'ADD' tableConstraintDef
 
-    | 'CHANGE' 'COLUMN'? name name columnDef place?
-    | 'MODIFY' 'COLUMN'? name columnDef place?
+    | 'CHANGE' 'COLUMN'? name createDef place?
+    | 'MODIFY' 'COLUMN'? createDef place?
     | 'DROP' ( 'COLUMN'? name ('RESTRICT' | 'CASCADE')? | 'FOREIGN' 'KEY' name | 'PRIMARY' 'KEY' | indexKey qname | 'CHECK' name | 'CONSTRAINT' name )
     | 'DISABLE' 'KEYS'
     | 'ENABLE' 'KEYS'
@@ -368,16 +368,11 @@ alterTableAction
     | 'SECONDARY_UNLOAD'
     ;
 
-
-
 place
-    : 'AFTER' name
-    | 'FIRST'
-    ;
+    : 'AFTER' name | 'FIRST' ;
 
 removePartitioning
-    : 'REMOVE' 'PARTITIONING'
-    ;
+    : 'REMOVE' 'PARTITIONING' ;
 
 allOrPartitionNameList
     : 'ALL'
@@ -1522,9 +1517,11 @@ tableConstraintDef
         )
     ;
 
-columnDef
-    : dataType collate? columnAttribute* ;
+createDef
+    : name dataType columnAttribute* ;
 
+// TODO refactor this and table constraint defs to better match docs
+// https://dev.mysql.com/doc/refman/9.3/en/create-table.html
 columnAttribute
     : 'NOT'? null
     | 'NOT' 'SECONDARY'
@@ -1545,6 +1542,7 @@ columnAttribute
     | visibility
     | ( 'GENERATED' 'ALWAYS' )? 'AS' '(' term ')' ( 'VIRTUAL' | 'STORED' )?
     | referenceDef
+    | collate
     ;
 
 now
