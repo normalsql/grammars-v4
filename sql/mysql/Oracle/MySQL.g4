@@ -643,10 +643,11 @@ select
 
 selectCore
     : 'SELECT' modifier* item (',' item)* into?
-       from? where? groupBy? having? window? qualify?
-    | 'VALUES' 'ROW' terms0 (',' 'ROW' terms0 )*
-    | 'TABLE' qname
+      ( 'FROM' ( 'DUAL' | tables ))?
+      where? groupBy? having? window? qualify?
+    | values
     | '(' select ')'
+    | 'TABLE' qname
     ;
 
 modifier
@@ -756,11 +757,16 @@ tables
     | tables ('LEFT' | 'RIGHT') 'OUTER'? 'JOIN' tables ( 'ON' term | 'USING' '(' name (',' name)* ')' )
     | tables ('NATURAL' 'INNER'? 'JOIN' | 'NATURAL' ('LEFT' | 'RIGHT') 'OUTER'? 'JOIN' ) tables
     | qname partition? tableAlias? indexHint* ('TABLESAMPLE' ('SYSTEM' | 'BERNOULLI') '(' literal ')')?
-    | 'JSON_TABLE' '(' term ',' string jsonColumns ')' tableAlias?
     | 'LATERAL'? '(' select ')' tableAlias? columns?
+    | values tableAlias?
+    | 'JSON_TABLE' '(' term ',' string jsonColumns ')' tableAlias?
+    | qname '(' term ( ',' term )* ')' tableAlias?
     | '{' 'OJ' tables '}'
     | '(' tables ')'
     ;
+
+values
+    : 'VALUES' term ( ',' term )* ;
 
 locking
     : 'FOR' ( 'UPDATE' | 'SHARE' ) ('OF' qname (',' qname)*)? ( 'SKIP' 'LOCKED' | 'NOWAIT' )?
@@ -983,9 +989,12 @@ tlsOption
     ;
 
 grantStatement
-    : 'GRANT' roleOrPrivilegesList 'TO' user (',' user)* ( 'WITH' 'ADMIN' 'OPTION' )?
-    | 'GRANT' (roleOrPrivilegesList | 'ALL' 'PRIVILEGES'?) 'ON' aclType? grantIdentifier 'TO' grantTargetList require? grantOptions? ('AS' 'USER' withRoles?)?
-    | 'GRANT' 'PROXY' 'ON' user 'TO' grantTargetList ( 'WITH' 'GRANT' 'OPTION' )?
+    : 'GRANT' (roleOrPrivilegesList | 'ALL' 'PRIVILEGES'?) 'ON' aclType? grantIdentifier
+      'TO' grantTargetList ( 'WITH' 'GRANT' 'OPTION' )?
+      // require? grantOptions?
+      ('AS' user withRoles? )?
+    | 'GRANT' 'PROXY' 'ON' user 'TO' grantTargetList
+    | 'GRANT' roleOrPrivilegesList 'TO' user (',' user)* ( 'WITH' 'ADMIN' 'OPTION' )?
     ;
 
 grantTargetList
@@ -1176,7 +1185,8 @@ explainable
     ;
 
 term
-    : qname
+    : 'ROW'? '(' term (',' term )* ')'
+    | qname
     | literal
     | term ( '->' | '->>' ) string
     | term 'AT' 'LOCAL'
@@ -1212,8 +1222,6 @@ term
     | term 'NOT'? 'BETWEEN' term 'AND' term
     | 'CASE' term? ('WHEN' term 'THEN' term)+ ('ELSE' term)? 'END'
     | term 'SOUNDS' 'LIKE' term
-
-    | 'ROW'? terms
     | 'EXISTS'? '(' select ')'
     | ('ALL' | 'ANY' | 'SOME') '(' select ')'
 
@@ -1271,7 +1279,6 @@ function
     | 'TIMESTAMP' '(' term (',' term)? ')'
     | 'TRIM' '(' ( term ('FROM' term)? | 'LEADING' term? 'FROM' term | 'TRAILING' term? 'FROM' term | 'BOTH' term? 'FROM' term ) ')'
     | 'USER' '(' ')'
-    | 'VALUES' '(' term ')'
     | 'YEAR' '(' term ')'
 
     // Function names that are not keywords.
