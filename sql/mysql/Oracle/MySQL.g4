@@ -3,13 +3,13 @@ grammar MySQL;
 /*
   Copyright 2025 Jason Osgood
 
-  Refactoring MySQL.g4 to adopt NormalSQL's rules, idioms, and style. Goal is
-  for grammars of misc dialects to all emit the same parse tree (given the
-  same input). A work in progress, as grammars converge over time.
+  Refactored MySQL grammar to adopt NormalSQL's rules, idioms, and style.
+  Goal is for misc dialects to all emit the same parse tree (given the
+  same input). A work in progress, as grammars converge over time, trial &
+  error, balancing tradeoffs (lex vs parse vs semantic validation).
 
-  Learning MySQL as I go. Since both 8.0.? and 9.? have LTS, I suppose those
-  are the versions/dialects to support. Meaning I'll postpone culling of all the
-  'master' and 'slave' stuff for a while. Hmmm.
+  Based on the excellent prior works done by Mike Lischke, Ivan Kochurkin,
+  Ivan Khudyashev. As well as MySQL's original sql_yacc.yy.
 
   Prior copyright notices below.
 
@@ -23,6 +23,7 @@ grammar MySQL;
   any one, tell me what'd best for everyone.
 
 */
+
 
 /*
  * Copyright © 2025, Oracle and/or its affiliates
@@ -44,15 +45,109 @@ grammar MySQL;
  * Written by Mike Lischke. Direct all bug reports, omissions etc. to mike.lischke@oracle.com.
  */
 
+ /*
+  MySQL (Positive Technologies) grammar
+  The MIT License (MIT).
+  Copyright (c) 2015-2017, Ivan Kochurkin (kvanttt@gmail.com), Positive Technologies.
+  Copyright (c) 2017, Ivan Khudyashev (IHudyashov@ptsecurity.com)
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  THE SOFTWARE.
+*/
+
+/*
+   Copyright (c) 2000, 2025, Oracle and/or its affiliates.
+
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of the GNU General Public License, version 2.0,
+   as published by the Free Software Foundation.
+
+   This program is designed to work with certain software (including
+   but not limited to OpenSSL) that is licensed under separate terms,
+   as designated in a particular file or component or in included license
+   documentation.  The authors of MySQL hereby grant you an additional
+   permission to link the program and your derivative works with the
+   separately licensed software that they have either included with
+   the program or referenced in the documentation.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License, version 2.0, for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+ */
+
+
+
+
+/*
+
+   I have no idea how to accomodate MySQL extensions.
+   Note: update rule 'keyword' whenever a new
+   keyword (token) is added (or removed).
+
+   Have matched order of alts from sql_yacc.yy, as needed, because I'm getting
+   cross-eyed doing side-by-side comparisons.
+
+   I think it'd be cool to topo sort the parser's rules.
+
+   Inline delimited lists to ease post-parsing. By shortening parse tree,
+   this moves (some) complexity from app code to grammar.
+
+      // Good
+      values : 'VALUES' term ( ',' term )* ;
+
+      // Bad
+      values : 'VALUES' terms ;
+      terms : terms ( ',' term )* ;
+
+
+   Have inlined most statements for now. May re-refactor once grammar has settled down.
+
+
+   Known problems:
+
+    - Only handles UTF-8 encoding
+
+       - Does not handle multibyte Unicode
+
+       - Does not handle pre-Unicode code page stuff
+
+       - Does not handle emojis
+
+     - Incorrectly discerns some numbers vs identifiers (that begin w/ digit)
+
+       - eg "SELECT 1ea10.1a20" yields an ID, FLOAT, and ID. Should just be ID.
+
+
+
+
+*/
+
 options {
     caseInsensitive = true;
 }
 
 statements
     : statement? ( ( ';' | '#end' ) statement? )* EOF ;
-
-// TODO: inlining all the statements for now. will re-refactor as needed.
-// TODO: update: matching order from sql_yacc.yy, because I'm getting cross-eyed
 
 statement
     : 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? name databaseOption*
