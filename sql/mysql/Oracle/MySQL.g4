@@ -671,14 +671,8 @@ into
         ( 'OUTFILE' string charset? fields? lines?
         | 'DUMPFILE' string
         | qname ( ',' qname )*
-//        | name ( ',' name )*
-//        | LOCAL ( ',' LOCAL )*
         )
     ;
-
-//procedureAnalyseClause
-//    : 'PROCEDURE' '(' (INT_NUMBER (',' INT_NUMBER)?)? ')'
-//    ;
 
 having
     : 'HAVING' term ;
@@ -752,9 +746,6 @@ orderExpression
 
 direction
     : 'ASC' | 'DESC' ;
-
-from
-    : 'FROM' ( 'DUAL' | tables ) ;
 
 tableReferenceList
     : tables (',' tables)* ;
@@ -957,40 +948,6 @@ replica
 ssl
     : 'REQUIRE' 'NO'? 'SSL' ;
 
-//alterUser
-//    : oldAlterUser
-//    | user
-//        ( 'IDENTIFIED' 'BY' string ( replace retainCurrentPassword? | retainCurrentPassword? )
-//        | 'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD' ( retainCurrentPassword? | replace retainCurrentPassword? )
-//        | 'IDENTIFIED' 'WITH' name
-//        | 'IDENTIFIED' 'WITH' name 'AS' string retainCurrentPassword?
-//        | 'IDENTIFIED' 'WITH' name 'BY' string ( replace retainCurrentPassword? | retainCurrentPassword? )
-//        | 'IDENTIFIED' 'WITH' name 'BY' 'RANDOM' 'PASSWORD' retainCurrentPassword?
-//        | discardOldPassword?
-//        | 'ADD' factor identified ('ADD' factor identified)?
-//        | 'MODIFY' factor identified ( 'MODIFY' factor identified )?
-//        | 'DROP' factor ('DROP' factor)?
-//        )
-//    ;
-
-//oldAlterUser
-//    : 'OOK' ;
-//    : user 'IDENTIFIED' 'BY'
-//        ( string replace retainCurrentPassword?
-//        | string retainCurrentPassword?
-//        | 'RANDOM' 'PASSWORD' replace? retainCurrentPassword?
-//        )
-//    | user 'IDENTIFIED' 'WITH' (
-//        name (
-//            'BY' string replace retainCurrentPassword?
-//            | 'AS' string retainCurrentPassword?
-//            | 'BY' string retainCurrentPassword?
-//            | 'BY' 'RANDOM' 'PASSWORD' retainCurrentPassword?
-//        )?
-//    )
-//    | user discardOldPassword?
-//    ;
-
 resourceWith
     : 'WITH'
       ( ( 'MAX_QUERIES_PER_HOUR'
@@ -1034,10 +991,6 @@ grantStatement
 grantTargetList
     : createUser (',' createUser)*
     | user (',' user)*
-    ;
-
-grantOptions
-    : 'WITH' grantOption
     ;
 
 exceptRoleList
@@ -1093,11 +1046,6 @@ roleOrPrivilege
 
 grantIdentifier
     : ( '*' | name ) ('.' ( '*' | name ))?
-    ;
-
-grantOption
-    : 'GRANT' 'OPTION'
-    | ( 'MAX_QUERIES_PER_HOUR' | 'MAX_UPDATES_PER_HOUR' | 'MAX_CONNECTIONS_PER_HOUR' | 'MAX_USER_CONNECTIONS' ) DECIMAL
     ;
 
 setRoleStatement
@@ -1253,7 +1201,6 @@ term
     | function over?
     | windowFunctionCall
     | 'GROUPING' terms
-//    | term 'CONCAT_PIPES' term
     | '{' name term '}'
     | 'MATCH' (qname (',' qname)* | '(' qname (',' qname)* ')') 'AGAINST' '(' term fulltextOptions? ')'
     | 'DEFAULT' '(' qname ')'
@@ -1386,11 +1333,6 @@ udfExpr
     : term alias?
     ;
 
-castType2
-    : 'SIGNED' ( 'INT' | 'INTEGER' )?
-    | 'UNSIGNED' ( 'INT' | 'INTEGER' )?
-    ;
-
 castType
     : 'BINARY' ('(' DECIMAL ')')?
 //    | 'CHAR' ('(' INTEGER ')')? charsetWithOptBinary?
@@ -1403,7 +1345,6 @@ castType
     | 'TIME' ('(' DECIMAL ')')?
     | 'DATETIME' ('(' DECIMAL ')')?
     | ('DEC' | 'DECIMAL' ) floatOptions?
-//    | 'DOUBLE'
     | 'JSON'
     | 'REAL'
     | 'DOUBLE' 'PRECISION'?
@@ -1489,12 +1430,6 @@ charset
 charset3
     : ( ( 'CHAR' | 'CHARACTER' ) 'SET' | 'CHARSET' )
     ;
-
-//charset2
-//    : ( 'CHAR' 'SET' | 'CHARACTER' 'SET' | 'CHARSET' ) name
-//    | 'ASCII'
-//    | 'UNICODE'
-//    ;
 
 timeUnitToo
     : timeUnit
@@ -1706,7 +1641,6 @@ tableOption
     | 'AVG_ROW_LENGTH' '='? DECIMAL
     | 'DEFAULT'? charset3 '='? name
     | 'CHECKSUM' '='? DECIMAL
-//    | 'DEFAULT'? 'COLLATE' '='? name
     | 'COLLATE' '='? name
     | 'COMMENT' '='? string
     | 'COMPRESSION' '='? string
@@ -1769,7 +1703,6 @@ partitionDef
         ( 'VALUES'
             ( 'LESS' 'THAN' ( terms | 'MAXVALUE' )
             | 'IN' terms
-//            | '(' '(' term (',' term)* ')' ( ',' '(' term (',' term)* ')' )* ')')
             )
         )?
         partitionOption*
@@ -1861,10 +1794,6 @@ alterAuthOption
 retainCurrentPassword
     : 'RETAIN' 'CURRENT' 'PASSWORD' ;
 
-//discardOldPassword
-//    : 'DISCARD' 'OLD' 'PASSWORD'
-//    ;
-
 userRegistration
     : factor 'INITIATE' 'REGISTRATION'
     | factor 'UNREGISTER'
@@ -1873,9 +1802,6 @@ userRegistration
 
 factor
     : DECIMAL 'FACTOR' ;
-
-//replacePassword
-//    : 'REPLACE' string ;
 
 user
     : userName
@@ -1919,7 +1845,6 @@ literal
     | string
     | ( '+' | '-' )? DECIMAL
     | ( '+' | '-' )? FLOAT
-//    | HEXADECIMAL
     | BINARY
     | SIZE
     | datetime
@@ -2766,10 +2691,10 @@ LOCAL
 GLOBAL
     : '@' '@' ( ID ( '.' ID )? )? ;
 
+
 STRING
-    : '\'' '\\' '\''
-    | '\'' ('\\'? .)*? '\''
-    | '$$' .*? '$$'
+    : '$$' .*? '$$'
+    | ('\'' ( '\\'? . )*? '\'')+
     ;
 
 NATIONAL
@@ -2783,7 +2708,6 @@ ID
     : '`' ( ~'`' | '``' )* '`'
     | [A-Z0-9_$\u0080-\uFFFF]+
     ;
-
 
 BLOB
     : 'x\'' BASE16* '\''
