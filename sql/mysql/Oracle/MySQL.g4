@@ -93,7 +93,7 @@ statement
 
 
     | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname
-       ('(' (name columnDef  | tableConstraintDef) (',' (name columnDef  | tableConstraintDef))* ')')?
+       ('(' (qname columnDef  | tableConstraintDef) (',' (qname columnDef  | tableConstraintDef))* ')')?
        ( tableOption (','? tableOption)* )? partitionBy? (('REPLACE' | 'IGNORE')? 'AS'? select)?
     | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ( 'LIKE' qname | '(' 'LIKE' qname ')' )
     | 'ALTER' onlineOption? 'TABLE' qname ( alterTableAction ( ','? alterTableAction )* )?
