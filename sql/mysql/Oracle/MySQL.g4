@@ -1257,9 +1257,7 @@ term
     | '{' name term '}'
     | 'MATCH' (qname (',' qname)* | '(' qname (',' qname)* ')') 'AGAINST' '(' term fulltextOptions? ')'
     | 'DEFAULT' '(' qname ')'
-//    | 'VALUES' '(' qname ')'
-
-    | term 'IS' 'NOT'? ('TRUE' | 'FALSE' | 'UNKNOWN' | 'NULL')
+    | term 'IS' 'NOT'? ( 'TRUE' | 'FALSE' | 'UNKNOWN' | null )
     | term 'NOT'? 'LIKE' term ('ESCAPE' term)?
     | term 'NOT'? ( 'REGEXP' | 'RLIKE' ) term
     | term 'NOT'? 'IN' ('(' select ')' | terms )
