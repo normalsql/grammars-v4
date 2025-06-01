@@ -155,15 +155,15 @@ statement
     | 'DROP' ( 'DATABASE' | 'SCHEMA' ) exists? qname
 
     | 'CREATE' definer? 'EVENT' notExists? qname 'ON' 'SCHEDULE' schedule ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ( 'ENABLE' | 'DISABLE' ( 'ON' 'REPLICA' )?)? ( 'COMMENT' string )? 'DO' compoundStatement
-    | 'ALTER' definer? 'EVENT' qname ( 'ON' 'SCHEDULE' schedule)? ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ( 'RENAME' 'TO' qname)? ( 'ENABLE' | 'DISABLE' ( 'ON' 'REPLICA' )? )? ( 'COMMENT' string)? ( 'DO' compoundStatement)?
+    | 'ALTER' definer? 'EVENT' qname ( 'ON' 'SCHEDULE' schedule )? ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ( 'RENAME' 'TO' qname )? ( 'ENABLE' | 'DISABLE' ( 'ON' 'REPLICA' )? )? ( 'COMMENT' string )? ( 'DO' compoundStatement )?
     | 'DROP' 'EVENT' exists? qname
 
-    | 'CREATE' definer? 'FUNCTION' notExists? qname '(' ( functionParameter ( ',' functionParameter)* )? ')' 'RETURNS' dataType collate? routineCreateOption* storedRoutineBody
+    | 'CREATE' definer? 'FUNCTION' notExists? qname '(' ( functionParameter ( ',' functionParameter )* )? ')' 'RETURNS' dataType collate? routineCreateOption* storedRoutineBody
     | 'CREATE' 'AGGREGATE'? 'FUNCTION' notExists? qname 'RETURNS' ( 'STRING' | 'INT' | 'INTEGER' | 'REAL' | 'DECIMAL' ) 'SONAME' string
     | 'ALTER' 'FUNCTION' qname routineCreateOption*
     | 'DROP' 'FUNCTION' exists? qname
 
-    | 'CREATE' definer? 'PROCEDURE' notExists? qname '(' ( procedureParameter ( ',' procedureParameter)* )? ')' routineCreateOption* storedRoutineBody
+    | 'CREATE' definer? 'PROCEDURE' notExists? qname '(' ( procedureParameter ( ',' procedureParameter )* )? ')' routineCreateOption* storedRoutineBody
     | 'ALTER' 'PROCEDURE' qname routineCreateOption*
     | 'DROP' 'PROCEDURE' exists? qname
 
@@ -172,40 +172,40 @@ statement
     | 'DROP' onlineOption? 'INDEX' qname 'ON' qname ( algorithmName | lockName )*
 
     | 'ALTER' 'LOGFILE' 'GROUP' qname 'ADD' 'UNDOFILE' string ( logfileOptions ( ','? logfileOptions )* )?
-    | 'CREATE' 'LOGFILE' 'GROUP' qname 'ADD' 'UNDOFILE' string (logfileGroupOption ( ','? logfileGroupOption)*)?
-    | 'DROP' 'LOGFILE' 'GROUP' qname ( dropLogfileGroupOption ( ','? dropLogfileGroupOption)* )?
+    | 'CREATE' 'LOGFILE' 'GROUP' qname 'ADD' 'UNDOFILE' string ( logfileGroupOption ( ','? logfileGroupOption )* )?
+    | 'DROP' 'LOGFILE' 'GROUP' qname ( dropLogfileGroupOption ( ','? dropLogfileGroupOption )* )?
 
     | 'CREATE' 'RESOURCE' 'GROUP' qname 'TYPE' equal? ( 'USER' | 'SYSTEM' ) resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable?
     | 'ALTER' 'RESOURCE' 'GROUP' qname resourceGroupVcpuList? resourceGroupPriority? resourceGroupEnableDisable? 'FORCE'?
-    | 'SET' 'RESOURCE' 'GROUP' qname ( 'FOR' DECIMAL ( ','? DECIMAL)*)?
+    | 'SET' 'RESOURCE' 'GROUP' qname ( 'FOR' DECIMAL ( ','? DECIMAL )* )?
     | 'DROP' 'RESOURCE' 'GROUP' qname 'FORCE'?
 
     | 'CREATE' 'ROLE' notExists? roleList
     | 'DROP' 'ROLE' exists? roleList
 
-    | 'CREATE' 'SERVER' qname 'FOREIGN' 'DATA' 'WRAPPER' qname 'OPTIONS' '(' serverOption ( ',' serverOption)* ')'
+    | 'CREATE' 'SERVER' qname 'FOREIGN' 'DATA' 'WRAPPER' qname 'OPTIONS' '(' serverOption ( ',' serverOption )* ')'
     | 'ALTER' 'SERVER' qname 'OPTIONS' '(' serverOption ( ',' serverOption )* ')'
     | 'DROP' 'SERVER' exists? name
 
 
     | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname
       ( '(' ( createDef  | tableConstraintDef ) ( ',' ( createDef  | tableConstraintDef ) )* ')' )?
-      ( tableOption ( ','? tableOption)* )? partitionBy? (('REPLACE' | 'IGNORE' )? 'AS'? select)?
+      ( tableOption ( ','? tableOption )* )? partitionBy? (('REPLACE' | 'IGNORE' )? 'AS'? select )?
 
     | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ( 'LIKE' qname | '(' 'LIKE' qname ')' )
     | 'ALTER' onlineOption? 'TABLE' qname ( alterTableAction ( ','? alterTableAction )* )?
     | 'RENAME' ( 'TABLE' | 'TABLES' ) renamePair ( ',' renamePair )*
-    | 'DROP' 'TEMPORARY'? ( 'TABLE' | 'TABLES' ) exists? qname ( ',' qname)* ( 'RESTRICT' | 'CASCADE' )?
+    | 'DROP' 'TEMPORARY'? ( 'TABLE' | 'TABLES' ) exists? qname ( ',' qname )* ( 'RESTRICT' | 'CASCADE' )?
 
     | 'CREATE' 'UNDO'? 'TABLESPACE' qname tablespaceOptions?
     | 'ALTER' 'UNDO'? 'TABLESPACE' qname tablespaceOptions
     | 'DROP' 'UNDO'? 'TABLESPACE' qname tablespaceOptions?
 
-    | 'CREATE' definer? 'TRIGGER' notExists? qname ( 'BEFORE' | 'AFTER' ) ( 'INSERT' | 'UPDATE' | 'DELETE' ) 'ON' qname 'FOR' 'EACH' 'ROW' (('FOLLOWS' | 'PRECEDES' ) qname)? compoundStatement
+    | 'CREATE' definer? 'TRIGGER' notExists? qname ( 'BEFORE' | 'AFTER' ) ( 'INSERT' | 'UPDATE' | 'DELETE' ) 'ON' qname 'FOR' 'EACH' 'ROW' (( 'FOLLOWS' | 'PRECEDES' ) qname )? compoundStatement
     | 'DROP' 'TRIGGER' exists? qname
 
-    | 'CREATE' 'USER' notExists? userAuthID ( ',' userAuthID)*
-      ( 'DEFAULT' 'ROLE' roleList)? require?
+    | 'CREATE' 'USER' notExists? userAuthID ( ',' userAuthID )*
+      ( 'DEFAULT' 'ROLE' roleList )? require?
       resourceWith?
       ( passwordOption2 | lockOption2 )*
       ( 'COMMENT' string | 'ATTRIBUTE' string )*
@@ -231,7 +231,7 @@ statement
     | 'CREATE' ( 'OR' 'REPLACE' )? viewAlgorithm? definer? security?
       'VIEW' notExists?  qname columns? 'AS' select viewCheckOption?
     | 'ALTER' viewAlgorithm? definer? security? 'VIEW' qname columns? 'AS' select viewCheckOption?
-    | 'DROP' 'VIEW' exists? qname ( ',' qname)* ( 'RESTRICT' | 'CASCADE' )?
+    | 'DROP' 'VIEW' exists? qname ( ',' qname )* ( 'RESTRICT' | 'CASCADE' )?
 
     | 'ALTER' 'INSTANCE'
         ( ( 'ENABLE' | 'DISABLE' ) 'INNODB' 'REDO_LOG'
@@ -246,9 +246,9 @@ statement
     | 'DROP' 'SPATIAL' 'REFERENCE' 'SYSTEM' exists? DECIMAL
 
 
-    | 'CALL' qname ( '(' (term ( ',' term)*)? ')' )?
+    | 'CALL' qname ( '(' ( term ( ',' term )* )? ')' )?
     | delete
-    | 'DO' item ( ',' item)*
+    | 'DO' item ( ',' item )*
     | 'HANDLER' qname 'OPEN' tableAlias?
     | 'HANDLER' qname ( 'CLOSE' | 'READ' handlerReadOrScan where? limit? )
     | insert
@@ -260,7 +260,7 @@ statement
     | 'SAVEPOINT' qname
     | 'ROLLBACK' 'WORK'? ( 'TO' 'SAVEPOINT'? name | ( 'AND' 'NO'? 'CHAIN' )? ( 'NO'? 'RELEASE' )? )
     | 'RELEASE' 'SAVEPOINT' qname
-    | 'LOCK' ( 'TABLES' | 'TABLE' ) lockItem ( ',' lockItem)*
+    | 'LOCK' ( 'TABLES' | 'TABLE' ) lockItem ( ',' lockItem )*
     | 'LOCK' 'INSTANCE' 'FOR' 'BACKUP'
     | 'UNLOCK' ( 'TABLES' | 'TABLE' | 'INSTANCE')
 
@@ -272,43 +272,43 @@ statement
     | 'XA' 'RECOVER' ( 'CONVERT' 'XID' )?
 
     | 'PURGE' 'BINARY' 'LOGS' ( 'TO' string | 'BEFORE' term )
-    | 'CHANGE' 'REPLICATION' 'SOURCE' 'TO' sourceDefinition ( ',' sourceDefinition)* channel?
-    | 'RESET' resetOption ( ',' resetOption)*
+    | 'CHANGE' 'REPLICATION' 'SOURCE' 'TO' sourceDefinition ( ',' sourceDefinition )* channel?
+    | 'RESET' resetOption ( ',' resetOption )*
     | 'RESET' 'PERSIST' ( exists? qname )?
     | 'CHANGE' 'REPLICATION' 'FILTER' filterDefinition ( ',' filterDefinition )* channel?
     | ( 'START' groupReplicationStartOptions? | 'STOP' ) 'GROUP_REPLICATION'
     | 'PREPARE' qname 'FROM' qname
-    | 'EXECUTE' qname ( 'USING' qname ( ',' qname )*)?
+    | 'EXECUTE' qname ( 'USING' qname ( ',' qname )* )?
     | ( 'DEALLOCATE' | 'DROP' ) 'PREPARE' name
 
     | 'CLONE' 'LOCAL' 'DATA' 'DIRECTORY' equal? string
     | 'CLONE' 'REMOTE' ( 'FOR' 'REPLICATION' )?
-    | 'CLONE' 'INSTANCE' 'FROM' user ':' DECIMAL 'IDENTIFIED' 'BY' name (ssl | 'DATA' 'DIRECTORY' equal? string ssl?)?
+    | 'CLONE' 'INSTANCE' 'FROM' user ':' DECIMAL 'IDENTIFIED' 'BY' name ( ssl | 'DATA' 'DIRECTORY' equal? string ssl?)?
 
     | grantStatement
     | revokeStatement
     | setRoleStatement
-    | 'ANALYZE' noLogging? ( 'TABLE' | 'TABLES' ) qname ( ',' qname)* histogram?
-    | 'CHECK' ( 'TABLE' | 'TABLES' ) qname ( ',' qname)* checkOption*
-    | 'CHECKSUM' 'TABLE' qname ( ',' qname)* ( 'QUICK' | 'EXTENDED' )?
-    | 'OPTIMIZE' noLogging? ( 'TABLE' | 'TABLES' ) qname ( ',' qname)*
-    | 'REPAIR' noLogging? ( 'TABLE' | 'TABLES' ) qname ( ',' qname)* repairType*
-    | 'UNINSTALL' ( 'PLUGIN' name | 'COMPONENT' string ( ',' string)* )
+    | 'ANALYZE' noLogging? ( 'TABLE' | 'TABLES' ) qname ( ',' qname )* histogram?
+    | 'CHECK' ( 'TABLE' | 'TABLES' ) qname ( ',' qname )* checkOption*
+    | 'CHECKSUM' 'TABLE' qname ( ',' qname )* ( 'QUICK' | 'EXTENDED' )?
+    | 'OPTIMIZE' noLogging? ( 'TABLE' | 'TABLES' ) qname ( ',' qname )*
+    | 'REPAIR' noLogging? ( 'TABLE' | 'TABLES' ) qname ( ',' qname )* repairType*
+    | 'UNINSTALL' ( 'PLUGIN' name | 'COMPONENT' string ( ',' string )* )
     | 'INSTALL' 'PLUGIN' name 'SONAME' string
-    | 'INSTALL' 'COMPONENT' strings ( 'SET' setter ( ',' setter )*)?
+    | 'INSTALL' 'COMPONENT' string ( ',' string )* ( 'SET' setter ( ',' setter )* )?
 
     | 'SET' setter ( ',' setter )*
     | 'SET' 'NAMES' ( equal term | qname collate? | 'DEFAULT' )
     | 'SET' ( 'GLOBAL' | 'SESSION' )? 'TRANSACTION' transactionCharacteristics ( ',' transactionCharacteristics )*
-    | 'SET' 'PASSWORD' ( 'FOR' user)? ( equal string | 'TO' 'RANDOM' ) ( 'REPLACE' string )? retainCurrentPassword?
+    | 'SET' 'PASSWORD' ( 'FOR' user )? ( equal string | 'TO' 'RANDOM' ) ( 'REPLACE' string )? retainCurrentPassword?
     | 'SET' charset qname
 
     | 'TRUNCATE' 'TABLE'? qname
-    | 'IMPORT' 'TABLE' 'FROM' strings
+    | 'IMPORT' 'TABLE' 'FROM' string ( ',' string )*
 
     | 'SHOW' 'BINARY' 'LOG' 'STATUS'
     | 'SHOW' 'BINARY' 'LOGS'
-    | 'SHOW' 'BINLOG' 'EVENTS' ( 'IN' string)? ( 'FROM' DECIMAL )? limit?
+    | 'SHOW' 'BINLOG' 'EVENTS' ( 'IN' string )? ( 'FROM' DECIMAL )? limit?
     | 'SHOW' charset like?
     | 'SHOW' 'COLLATION' like?
     | 'SHOW' ( 'FULL' | 'EXTENDED' 'FULL'?)? ( 'FIELDS' | 'COLUMNS' ) inDb inDb? like?
@@ -343,9 +343,9 @@ statement
     | 'SHOW' 'PROCEDURE' 'CODE' qname
     | 'SHOW' 'PROCEDURE' 'STATUS' like?
     | 'SHOW' 'FULL'? 'PROCESSLIST'
-    | 'SHOW' 'PROFILE' (profileDef ( ',' profileDef)*)? ( 'FOR' 'QUERY' DECIMAL )? limit?
+    | 'SHOW' 'PROFILE' ( profileDef ( ',' profileDef )* )? ( 'FOR' 'QUERY' DECIMAL )? limit?
     | 'SHOW' 'PROFILES'
-    | 'SHOW' 'RELAYLOG' 'EVENTS' ( 'IN' string)? ( 'FROM' DECIMAL )? limit? channel?
+    | 'SHOW' 'RELAYLOG' 'EVENTS' ( 'IN' string )? ( 'FROM' DECIMAL )? limit? channel?
     | 'SHOW' 'REPLICA' 'STATUS' channel?
     | 'SHOW' 'REPLICAS'
     | 'SHOW' 'REPLICA' 'HOSTS'
@@ -358,14 +358,14 @@ statement
 
 
     | 'SHUTDOWN'
-    | ( 'SIGNAL' signalCondition | 'RESIGNAL' signalCondition? ) ( 'SET' signalItem ( ',' signalItem)* )?
-    | 'START' 'TRANSACTION' (startTransactionMode ( ',' startTransactionMode)*)?
-    | 'START' 'REPLICA' replicaThreadOptions? ( 'UNTIL' replicaUntil)? userOption? passwordOption? defaultAuthOption? pluginDirOption? channel?
+    | ( 'SIGNAL' signalCondition | 'RESIGNAL' signalCondition? ) ( 'SET' signalItem ( ',' signalItem )* )?
+    | 'START' 'TRANSACTION' ( startTransactionMode ( ',' startTransactionMode )* )?
+    | 'START' 'REPLICA' replicaThreadOptions? ( 'UNTIL' replicaUntil )? userOption? passwordOption? defaultAuthOption? pluginDirOption? channel?
     | 'STOP' 'REPLICA' replicaThreadOptions? channel?
 
     | 'BINLOG' string
     | 'CACHE' 'INDEX' keyCacheListOrParts 'IN' qname
-    | 'FLUSH' noLogging? ( flushTables | flushOption ( ',' flushOption)* )
+    | 'FLUSH' noLogging? ( flushTables | flushOption ( ',' flushOption )* )
     | 'KILL' ( 'CONNECTION' | 'QUERY' )? term
     | 'LOAD' 'INDEX' 'INTO' 'CACHE' preloadTail
 
@@ -386,7 +386,7 @@ statement
     | 'HELP' name
     | 'USE' name
     | 'RESTART'
-    | 'GET' ( 'CURRENT' | 'STACKED' )? 'DIAGNOSTICS' ( statementInformationItem ( ',' statementInformationItem)* | 'CONDITION' literal conditionInformationItem ( ',' conditionInformationItem )* )
+    | 'GET' ( 'CURRENT' | 'STACKED' )? 'DIAGNOSTICS' ( statementInformationItem ( ',' statementInformationItem )* | 'CONDITION' literal conditionInformationItem ( ',' conditionInformationItem )* )
     | beginWork
     ;
 
@@ -408,12 +408,12 @@ logfileGroupOption
     | ( 'UNDO_BUFFER_SIZE' | 'REDO_BUFFER_SIZE' ) '='? byteSize
     | 'NODEGROUP' '='? DECIMAL
     | 'STORAGE'? 'ENGINE' '='? name
-    | ( 'WAIT' | 'NO_WAIT')
+    | ( 'WAIT' | 'NO_WAIT' )
     | 'COMMENT' '='? string
     ;
 
 dropLogfileGroupOption
-    : ( 'WAIT' | 'NO_WAIT')
+    : ( 'WAIT' | 'NO_WAIT' )
     | 'STORAGE'? 'ENGINE' '='? name
     ;
 
@@ -424,7 +424,7 @@ alterTableAction
     | ( 'WITH' | 'WITHOUT' ) 'VALIDATION'
 
     | 'ADD' 'COLUMN'?  createDef  place?
-    | 'ADD' 'COLUMN'? '(' ( createDef | tableConstraintDef) ( ',' ( createDef | tableConstraintDef) )* ')'
+    | 'ADD' 'COLUMN'? '(' ( createDef | tableConstraintDef ) ( ',' ( createDef | tableConstraintDef ) )* ')'
     | 'ADD' tableConstraintDef
 
     | 'CHANGE' 'COLUMN'? name createDef place?
@@ -446,8 +446,8 @@ alterTableAction
     | partitionBy
     | removePartitioning
     | 'DISCARD' 'TABLESPACE' | 'IMPORT' 'TABLESPACE'
-    | 'ADD' 'PARTITION' ( noLogging? ( '(' partitionDef ( ',' partitionDef)* ')' | 'PARTITIONS' DECIMAL ) )?
-    | 'DROP' 'PARTITION' name ( ',' name)*
+    | 'ADD' 'PARTITION' ( noLogging? ( '(' partitionDef ( ',' partitionDef )* ')' | 'PARTITIONS' DECIMAL ) )?
+    | 'DROP' 'PARTITION' name ( ',' name )*
     | 'REBUILD' 'PARTITION' noLogging? allOrPartitionNameList
     | 'OPTIMIZE' 'PARTITION' noLogging? allOrPartitionNameList noLogging?
     | 'ANALYZE' 'PARTITION' noLogging? allOrPartitionNameList
@@ -455,8 +455,8 @@ alterTableAction
     | 'REPAIR' 'PARTITION' noLogging? allOrPartitionNameList repairType*
     | 'COALESCE' 'PARTITION' noLogging? DECIMAL
     | 'TRUNCATE' 'PARTITION' allOrPartitionNameList
-    | 'REORGANIZE' 'PARTITION' noLogging? ( name ( ',' name)* 'INTO' '(' partitionDef ( ',' partitionDef)* ')' )?
-    | 'EXCHANGE' 'PARTITION' name 'WITH' 'TABLE' qname (('WITH' | 'WITHOUT' ) 'VALIDATION' )?
+    | 'REORGANIZE' 'PARTITION' noLogging? ( name ( ',' name )* 'INTO' '(' partitionDef ( ',' partitionDef )* ')' )?
+    | 'EXCHANGE' 'PARTITION' name 'WITH' 'TABLE' qname (( 'WITH' | 'WITHOUT' ) 'VALIDATION' )?
     | 'DISCARD' 'PARTITION' allOrPartitionNameList 'TABLESPACE'
     | 'IMPORT' 'PARTITION' allOrPartitionNameList 'TABLESPACE'
     | 'SECONDARY_LOAD'
@@ -471,7 +471,7 @@ removePartitioning
 
 allOrPartitionNameList
     : 'ALL'
-    | name ( ',' name)*
+    | name ( ',' name )*
     ;
 
 viewCheckOption
@@ -559,7 +559,7 @@ tablespaceOption
     | 'WAIT'
     | 'RENAME' 'TO' name
     | 'AUTOEXTEND_SIZE' '='? DECIMAL
-    | 'SET' ( 'ACTIVE' | 'INACTIVE')
+    | 'SET' ( 'ACTIVE' | 'INACTIVE' )
     | 'ENCRYPTION' '='? string
     | 'ENGINE' '='? name
     | 'NODEGROUP' '='? DECIMAL
@@ -587,19 +587,18 @@ renamePair
 
 delete
     : with? 'DELETE' 'LOW_PRIORITY'? 'QUICK'? 'IGNORE'?
-        ( 'FROM' qname tableAlias? ( 'PARTITION' '(' name ( ',' name)* ')' )? where? orderBy? limitCount?
+        ( 'FROM' qname tableAlias? ( 'PARTITION' '(' name ( ',' name )* ')' )? where? orderBy? limitCount?
         | wild ( ',' wild )* 'FROM' tableReferenceList where?
         | 'FROM' wild ( ',' wild )* 'USING' tableReferenceList where?
         )
     ;
 
-
     wild : qname ( '.' '*' )? ;
 
 handlerReadOrScan
-    : ( 'FIRST' | 'NEXT')
+    : ( 'FIRST' | 'NEXT' )
     | name
-        ( ( 'FIRST' | 'NEXT' | 'PREV' | 'LAST')
+        ( ( 'FIRST' | 'NEXT' | 'PREV' | 'LAST' )
         | ( '=' | '<' | '>' | '<=' | '>=' ) terms
         )
     ;
@@ -607,25 +606,27 @@ handlerReadOrScan
 replace
     : 'REPLACE' ( 'LOW_PRIORITY' | 'DELAYED' )?
        'INTO'? qname partition?
-       ( insertFromConstructor | 'SET' setter ( ',' setter)* | insertQueryExpression )?
+       ( insertFromConstructor | 'SET' setter ( ',' setter )* | insertQueryExpression )?
     ;
 
 insert
     : 'INSERT' ( 'LOW_PRIORITY' | 'DELAYED' | 'HIGH_PRIORITY' )?
       'IGNORE'?
       'INTO'? qname partition?
-      ( insertFromConstructor valuesReference? | 'SET' setter ( ',' setter)* valuesReference? | insertQueryExpression )
-      ( 'ON' 'DUPLICATE' 'KEY' 'UPDATE' setter ( ',' setter)*)?
+      ( insertFromConstructor valuesReference?
+      | 'SET' setter ( ',' setter )* valuesReference?
+      | insertQueryExpression
+      )
+      ( 'ON' 'DUPLICATE' 'KEY' 'UPDATE' setter ( ',' setter )* )?
     ;
 
 insertFromConstructor
-    : ( '(' (wild ( ',' wild)*)? ')' )? ( 'VALUES' | 'VALUE' ) terms0 ( ',' terms0 )*
-    ;
+    : ( '(' ( wild ( ',' wild )* )? ')' )? ( 'VALUES' | 'VALUE' ) term  ( ',' term )* ;
 
 insertQueryExpression
     : with? selectCore orderBy? limit?
     | '(' select ')'
-    | ( '(' (wild ( ',' wild)*)? ')' )? select
+    | ( '(' ( wild ( ',' wild )* )? ')' )? select
     ;
 
 terms
@@ -663,7 +664,7 @@ select
     ;
 
 selectCore
-    : 'SELECT' modifier* item ( ',' item)* into?
+    : 'SELECT' modifier* item ( ',' item )* into?
       ( 'FROM' ( 'DUAL' | tables ) )?
       where? groupBy? having? window? qualify?
     | values
@@ -683,7 +684,7 @@ modifier
     ;
 
 limit
-    : 'LIMIT' literal (( ',' | 'OFFSET' ) literal)? ;
+    : 'LIMIT' literal (( ',' | 'OFFSET' ) literal )? ;
 
 limitCount
     : 'LIMIT' DECIMAL ;
@@ -703,14 +704,14 @@ qualify
     : 'QUALIFY' term ;
 
 window
-    : 'WINDOW' windowDefinition ( ',' windowDefinition)* ;
+    : 'WINDOW' windowDefinition ( ',' windowDefinition )* ;
 
 windowDefinition
     : name 'AS' windowSpec ;
 
 windowSpec
-    : '(' name? ( 'PARTITION' 'BY' orderExpression ( ',' orderExpression)*)? orderBy?
-      (('ROWS' | 'RANGE' | 'GROUPS' ) windowFrameExtent
+    : '(' name? ( 'PARTITION' 'BY' orderExpression ( ',' orderExpression )* )? orderBy?
+      (( 'ROWS' | 'RANGE' | 'GROUPS' ) windowFrameExtent
       ( 'EXCLUDE' ( 'CURRENT' 'ROW' | 'GROUP' | 'TIES' | 'NO' 'OTHERS' ) )?
       )?
       ')'
@@ -749,12 +750,12 @@ cte
     : name columns? 'AS' '(' select ')' ;
 
 groupBy
-    : 'GROUP' 'BY' orderExpression ( ',' orderExpression)* ( 'WITH' 'ROLLUP' )?
+    : 'GROUP' 'BY' orderExpression ( ',' orderExpression )* ( 'WITH' 'ROLLUP' )?
     | 'GROUP' 'BY' ( 'ROLLUP' | 'CUBE' ) terms
     ;
 
 orderBy
-    : 'ORDER' 'BY' orderExpression ( ',' orderExpression)* ;
+    : 'ORDER' 'BY' orderExpression ( ',' orderExpression )* ;
 
 orderExpression
     : term direction? ;
@@ -767,8 +768,8 @@ tableReferenceList
 
 tables
     : tables ',' tables
-    | tables (('INNER' | 'CROSS' )? 'JOIN' | 'STRAIGHT_JOIN' ) tables ( 'ON' term | 'USING' '(' name ( ',' name)* ')' )?
-    | tables ( 'LEFT' | 'RIGHT' ) 'OUTER'? 'JOIN' tables ( 'ON' term | 'USING' '(' name ( ',' name)* ')' )
+    | tables ( ( 'INNER' | 'CROSS' )? 'JOIN' | 'STRAIGHT_JOIN' ) tables ( 'ON' term | 'USING' '(' name ( ',' name )* ')' )?
+    | tables ( 'LEFT' | 'RIGHT' ) 'OUTER'? 'JOIN' tables ( 'ON' term | 'USING' '(' name ( ',' name )* ')' )
     | tables ( 'NATURAL' 'INNER'? 'JOIN' | 'NATURAL' ( 'LEFT' | 'RIGHT' ) 'OUTER'? 'JOIN' ) tables
     | qname partition? tableAlias? indexHint* ( 'TABLESAMPLE' ( 'SYSTEM' | 'BERNOULLI' ) '(' literal ')' )?
     | 'LATERAL'? '(' select ')' tableAlias? columns?
@@ -783,7 +784,7 @@ values
     : 'VALUES' term ( ',' term )* ;
 
 locking
-    : 'FOR' ( 'UPDATE' | 'SHARE' ) ( 'OF' qname ( ',' qname)*)? ( 'SKIP' 'LOCKED' | 'NOWAIT' )?
+    : 'FOR' ( 'UPDATE' | 'SHARE' ) ( 'OF' qname ( ',' qname )* )? ( 'SKIP' 'LOCKED' | 'NOWAIT' )?
     | 'LOCK' 'IN' 'SHARE' 'MODE'
     ;
 
@@ -800,7 +801,7 @@ where
     : 'WHERE' term ;
 
 jsonColumns
-    : 'COLUMNS' '(' jsonColumn ( ',' jsonColumn)* ')' ;
+    : 'COLUMNS' '(' jsonColumn ( ',' jsonColumn )* ')' ;
 
 jsonColumn
     : name 'FOR' 'ORDINALITY'
@@ -827,7 +828,7 @@ indexHintScope
 
 update
     : with? 'UPDATE' 'LOW_PRIORITY'? 'IGNORE'? tableReferenceList
-      'SET' setter ( ',' setter)*
+      'SET' setter ( ',' setter )*
       where?
       orderBy? limitCount?
     ;
@@ -844,11 +845,11 @@ lockOption
     ;
 
 xid
-    : string ( ',' string ( ',' ( DECIMAL | string ) )?)?
+    : string ( ',' string ( ',' ( DECIMAL | string ) )? )?
     ;
 
 resetOption
-    : 'BINARY' 'LOGS' 'AND' 'GTIDS' ( 'TO' DECIMAL)?
+    : 'BINARY' 'LOGS' 'AND' 'GTIDS' ( 'TO' DECIMAL )?
     | 'REPLICA' 'ALL'? channel?
     ;
 
@@ -876,15 +877,15 @@ sourceDefinition
     | 'SOURCE_PUBLIC_KEY_PATH' '=' string
     | 'GET_SOURCE_PUBLIC_KEY' '=' DECIMAL
     | 'SOURCE_HEARTBEAT_PERIOD' '=' literal
-    | 'IGNORE_SERVER_IDS' '=' '(' (DECIMAL ( ',' DECIMAL)*)? ')'
+    | 'IGNORE_SERVER_IDS' '=' '(' ( DECIMAL ( ',' DECIMAL )* )? ')'
     | 'SOURCE_COMPRESSION_ALGORITHM' '=' string
     | 'SOURCE_ZSTD_COMPRESSION_LEVEL' '=' DECIMAL
     | 'SOURCE_AUTO_POSITION' '=' DECIMAL
-    | 'PRIVILEGE_CHECKS_USER' '=' userName
+    | 'PRIVILEGE_CHECKS_USER' '=' user
     | 'REQUIRE_ROW_FORMAT' '=' DECIMAL
-    | 'REQUIRE_TABLE_PRIMARY_KEY_CHECK' '=' ( 'STREAM' | 'ON' | 'OFF' | 'GENERATE')
+    | 'REQUIRE_TABLE_PRIMARY_KEY_CHECK' '=' ( 'STREAM' | 'ON' | 'OFF' | 'GENERATE' )
     | 'SOURCE_CONNECTION_AUTO_FAILOVER' '=' DECIMAL
-    | 'ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS' '=' ( 'OFF' | 'LOCAL' | string)
+    | 'ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS' '=' ( 'OFF' | 'LOCAL' | string )
     | 'GTID_ONLY' '=' DECIMAL
     | sourceFileDef
     ;
@@ -898,13 +899,13 @@ sourceFileDef
 
 // TODO use qname (vs name, string) for all?
 filterDefinition
-    : 'REPLICATE_DO_DB' '=' '(' (name ( ',' name)*)? ')'
-    | 'REPLICATE_IGNORE_DB' '=' '(' (name ( ',' name)*)? ')'
-    | 'REPLICATE_DO_TABLE' '=' '(' (qname ( ',' qname)*)? ')'
-    | 'REPLICATE_IGNORE_TABLE' '=' '(' (qname ( ',' qname)*)? ')'
-    | 'REPLICATE_WILD_DO_TABLE' '=' '(' (string ( ',' string)*)? ')'
-    | 'REPLICATE_WILD_IGNORE_TABLE' '=' '(' (string ( ',' string)*)? ')'
-    | 'REPLICATE_REWRITE_DB' '=' '(' (schemaIdentifierPair ( ',' schemaIdentifierPair)*)? ')'
+    : 'REPLICATE_DO_DB' '=' '(' ( name ( ',' name )* )? ')'
+    | 'REPLICATE_IGNORE_DB' '=' '(' ( name ( ',' name )* )? ')'
+    | 'REPLICATE_DO_TABLE' '=' '(' ( qname ( ',' qname )* )? ')'
+    | 'REPLICATE_IGNORE_TABLE' '=' '(' ( qname ( ',' qname )* )? ')'
+    | 'REPLICATE_WILD_DO_TABLE' '=' '(' ( string ( ',' string )* )? ')'
+    | 'REPLICATE_WILD_IGNORE_TABLE' '=' '(' ( string ( ',' string )* )? ')'
+    | 'REPLICATE_REWRITE_DB' '=' '(' ( schemaIdentifierPair ( ',' schemaIdentifierPair )* )? ')'
     ;
 
 schemaIdentifierPair
@@ -985,12 +986,12 @@ grantStatement
       // require? grantOptions?
       ( 'AS' user withRoles? )?
     | 'GRANT' 'PROXY' 'ON' user 'TO' grantTargetList
-    | 'GRANT' roleOrPrivilegesList 'TO' user ( ',' user)* ( 'WITH' 'ADMIN' 'OPTION' )?
+    | 'GRANT' roleOrPrivilegesList 'TO' user ( ',' user )* ( 'WITH' 'ADMIN' 'OPTION' )?
     ;
 
 //grantTargetList
-//    : createUser ( ',' createUser)*
-//    | user ( ',' user)*
+//    : createUser ( ',' createuser )*
+//    | user ( ',' user )*
 //    ;
 
 grantTargetList
@@ -1010,14 +1011,14 @@ withRoles
 
 revokeStatement
     : 'REVOKE' exists?
-        ( roleOrPrivilegesList 'FROM' user ( ',' user)*
-        | roleOrPrivilegesList 'ON' aclType? grantIdentifier 'FROM' user ( ',' user)*
+        ( roleOrPrivilegesList 'FROM' user ( ',' user )*
+        | roleOrPrivilegesList 'ON' aclType? grantIdentifier 'FROM' user ( ',' user )*
         | 'ALL' 'PRIVILEGES'?
             ( 'ON' aclType? grantIdentifier
             | ',' 'GRANT' 'OPTION'
             )
-            'FROM' user ( ',' user)*
-        | 'PROXY' 'ON' user 'FROM' user ( ',' user)*
+            'FROM' user ( ',' user )*
+        | 'PROXY' 'ON' user 'FROM' user ( ',' user )*
         )
         ( 'IGNORE' 'UNKNOWN' 'USER' )?
     ;
@@ -1032,14 +1033,14 @@ roleOrPrivilegesList
     : roleOrPrivilege ( ',' roleOrPrivilege )* ;
 
 roleOrPrivilege
-    : ( name columns? | userName )
+    : ( name columns? | user )
     | ( 'SELECT' | 'INSERT' | 'UPDATE' | 'REFERENCES' ) columns?
     | ( 'DELETE' | 'USAGE' | 'INDEX' | 'DROP' | 'EXECUTE' | 'RELOAD' | 'SHUTDOWN' | 'PROCESS' | 'FILE' | 'PROXY' | 'SUPER' | 'EVENT' | 'TRIGGER' )
     | 'GRANT' 'OPTION'
     | 'SHOW' 'DATABASES'
     | 'CREATE' ( 'TEMPORARY' 'TABLES' | 'ROUTINE' | 'TABLESPACE' | 'USER' | 'VIEW' )?
     | 'LOCK' 'TABLES'
-    | 'REPLICATION' ( 'CLIENT' | 'REPLICA')
+    | 'REPLICATION' ( 'CLIENT' | 'REPLICA' )
     | 'SHOW' 'VIEW'
     | 'ALTER' 'ROUTINE'?
     | ( 'CREATE' | 'DROP' ) 'ROLE'
@@ -1050,20 +1051,20 @@ grantIdentifier
 
 setRoleStatement
     : 'SET' 'ROLE' roleList
-    | 'SET' 'ROLE' ( 'NONE' | 'DEFAULT')
-    | 'SET' 'ROLE' 'ALL' ( 'EXCEPT' roleList)?
-    | 'SET' 'DEFAULT' 'ROLE' (roleList | 'NONE' | 'ALL' ) 'TO' roleList
+    | 'SET' 'ROLE' ( 'NONE' | 'DEFAULT' )
+    | 'SET' 'ROLE' 'ALL' ( 'EXCEPT' roleList )?
+    | 'SET' 'DEFAULT' 'ROLE' ( roleList | 'NONE' | 'ALL' ) 'TO' roleList
     ;
 
 roleList
-    : userName ( ',' userName )* ;
+    : user ( ',' user )* ;
 
 histogram
     : 'UPDATE' 'HISTOGRAM' 'ON' name
-        (( ',' name)* ( 'WITH' DECIMAL 'BUCKETS' )? (('MANUAL' | 'AUTO' )? 'UPDATE' )?
+        ( ( ',' name )* ( 'WITH' DECIMAL 'BUCKETS' )? ( ( 'MANUAL' | 'AUTO' )? 'UPDATE' )?
         | ( 'USING' 'DATA' string )?
         )
-    | 'DROP' 'HISTOGRAM' 'ON' name ( ',' name)*
+    | 'DROP' 'HISTOGRAM' 'ON' name ( ',' name )*
     ;
 
 checkOption
@@ -1080,7 +1081,7 @@ repairType
 transactionCharacteristics
     : 'ISOLATION' 'LEVEL'
         ( 'REPEATABLE' 'READ'
-        | 'READ' ( 'COMMITTED' | 'UNCOMMITTED')
+        | 'READ' ( 'COMMITTED' | 'UNCOMMITTED' )
         | 'SERIALIZABLE'
         )
     | 'READ' ( 'WRITE' | 'ONLY' )
@@ -1102,7 +1103,7 @@ profileDef
     ;
 
 keyCacheListOrParts
-    : assignToKeycache ( ',' assignToKeycache)*
+    : assignToKeycache ( ',' assignToKeycache )*
     | qname 'PARTITION' '(' allOrPartitionNameList ')' cacheKeyList?
     ;
 
@@ -1120,41 +1121,34 @@ flushOption
     ;
 
 flushTables
-    : ( 'TABLES' | 'TABLE')
+    : ( 'TABLES' | 'TABLE' )
       ( 'WITH' 'READ' 'LOCK'
-      | qname ( ',' qname)* ( 'FOR' 'EXPORT' | 'WITH' 'READ' 'LOCK' )?
+      | qname ( ',' qname )* ( 'FOR' 'EXPORT' | 'WITH' 'READ' 'LOCK' )?
       )?
     ;
 
 preloadTail
     : qname adminPartition cacheKeyList? ( 'IGNORE' 'LEAVES' )?
-    | preloadKeys ( ',' preloadKeys)*
+    | preloadKeys ( ',' preloadKeys )*
     ;
 
 preloadKeys
-    : qname cacheKeyList? ( 'IGNORE' 'LEAVES' )?
-    ;
+    : qname cacheKeyList? ( 'IGNORE' 'LEAVES' )? ;
 
 adminPartition
-    : 'PARTITION' '(' allOrPartitionNameList ')'
-    ;
+    : 'PARTITION' '(' allOrPartitionNameList ')' ;
 
 resourceGroupVcpuList
-    : 'VCPU' equal? range ( ','? range)*
-    ;
+    : 'VCPU' equal? range ( ','? range )* ;
 
 range
-    : DECIMAL ( '-' DECIMAL)?
-    ;
+    : DECIMAL ( '-' DECIMAL )? ;
 
 resourceGroupPriority
-    : 'THREAD_PRIORITY' equal? DECIMAL
-    ;
+    : 'THREAD_PRIORITY' equal? DECIMAL ;
 
 resourceGroupEnableDisable
-    : 'ENABLE'
-    | 'DISABLE'
-    ;
+    : 'ENABLE' | 'DISABLE' ;
 
 explainable
     : select
@@ -1200,7 +1194,7 @@ term
     | term 'NOT'? 'IN' ( '(' select ')' | terms )
     | term 'MEMBER' 'OF'? '(' term ')'
     | term 'NOT'? 'BETWEEN' term 'AND' term
-    | 'CASE' term? ( 'WHEN' term 'THEN' term)+ ( 'ELSE' term)? 'END'
+    | 'CASE' term? ( 'WHEN' term 'THEN' term )+ ( 'ELSE' term )? 'END'
     | term 'SOUNDS' 'LIKE' term
     | 'EXISTS'? '(' select ')'
     | ( 'ALL' | 'ANY' | 'SOME' ) '(' select ')'
@@ -1218,7 +1212,7 @@ interval
 windowFunctionCall
     : ( 'ROW_NUMBER' | 'RANK' | 'DENSE_RANK' | 'CUME_DIST' | 'PERCENT_RANK' ) '(' ')' over
     | 'NTILE' ( '(' DECIMAL ')' | '(' term ')' ) over
-    | ( 'LEAD' | 'LAG' ) '(' term ( ',' term ( ',' term)? )? ')' nullTreatment? over
+    | ( 'LEAD' | 'LAG' ) '(' term ( ',' term ( ',' term )? )? ')' nullTreatment? over
     | ( 'FIRST_VALUE' | 'LAST_VALUE' ) '(' term ')' nullTreatment? over
     | 'NTH_VALUE' '(' term ',' term ')' ( 'FROM' ( 'FIRST' | 'LAST' ) )? nullTreatment? over
     ;
@@ -1238,51 +1232,51 @@ fulltextOptions
 function
     // Function names that are keywords.
     : ID '(' ( udfExpr ( ',' udfExpr )* )? ')'
-    | qname '(' (term ( ',' term)* )? ')'
+    | qname '(' ( term ( ',' term )* )? ')'
 
-    | 'CHAR' '(' term ( ',' term)* ( 'USING' name)? ')'
+    | 'CHAR' '(' term ( ',' term )* ( 'USING' name )? ')'
     | 'CURRENT_USER' ( '(' ')' )?
     | 'DATE' '(' term ')'
     | 'DAY' '(' term ')'
     | 'HOUR' '(' term ')'
     | 'INSERT' '(' term ',' term ',' term ',' term ')'
-    | 'INTERVAL' '(' term ( ',' term)+ ')'
-    | 'JSON_VALUE' '(' term ',' string ( 'RETURNING' castType)? ( jsonResponse jsonResponse? )? ')'
+    | 'INTERVAL' '(' term ( ',' term )+ ')'
+    | 'JSON_VALUE' '(' term ',' string ( 'RETURNING' castType )? ( jsonResponse jsonResponse? )? ')'
     | 'LEFT' '(' term ',' term ')'
     | 'MINUTE' '(' term ')'
     | 'MONTH' '(' term ')'
     | 'RIGHT' '(' term ',' term ')'
     | 'SECOND' '(' term ')'
     | 'TIME' '(' term ')'
-    | 'TIMESTAMP' '(' term ( ',' term)? ')'
-    | 'TRIM' '(' ( term ( 'FROM' term)? | 'LEADING' term? 'FROM' term | 'TRAILING' term? 'FROM' term | 'BOTH' term? 'FROM' term ) ')'
+    | 'TIMESTAMP' '(' term ( ',' term )? ')'
+    | 'TRIM' '(' ( term ( 'FROM' term )? | 'LEADING' term? 'FROM' term | 'TRAILING' term? 'FROM' term | 'BOTH' term? 'FROM' term ) ')'
     | 'USER' '(' ')'
     | 'YEAR' '(' term ')'
 
     // Function names that are not keywords.
     | ( 'ADDDATE' | 'SUBDATE' ) '(' term ',' term ')'
     | 'CURDATE' ( '(' ')' )?
-    | 'CURTIME' ( '(' (DECIMAL)? ')' )?
+    | 'CURTIME' ( '(' DECIMAL? ')' )?
     | ( 'DATE_ADD' | 'DATE_SUB' ) '(' term ',' interval ')'
     | 'EXTRACT' '(' timeUnitToo 'FROM' term ')'
     | 'GET_FORMAT' '(' ( 'DATE' | 'TIME' | 'DATETIME' | 'TIMESTAMP' ) ',' term ')'
     | 'LOG' '(' term ( ',' term )? ')'
     | now
     | 'POSITION' '(' term 'IN' term ')'
-    | 'SUBSTRING' '(' term ( ',' term ( ',' term)? | 'FROM' term ( 'FOR' term)? ) ')'
-    | 'SYSDATE' ( '(' (DECIMAL)? ')' )?
+    | 'SUBSTRING' '(' term ( ',' term ( ',' term )? | 'FROM' term ( 'FOR' term )? ) ')'
+    | 'SYSDATE' ( '(' DECIMAL? ')' )?
     | ( 'TIMESTAMPADD' | 'TIMESTAMPDIFF' ) '(' timeUnit ',' term ',' term ')'
     | 'UTC_DATE' ( '(' ')' )?
-    | 'UTC_TIME' ( '(' (DECIMAL)? ')' )?
-    | 'UTC_TIMESTAMP' ( '(' (DECIMAL)? ')' )?
+    | 'UTC_TIME' ( '(' DECIMAL? ')' )?
+    | 'UTC_TIMESTAMP' ( '(' DECIMAL? ')' )?
 
     | 'ASCII' '(' term ')'
     | 'CHARSET' '(' term ')'
-    | 'COALESCE' '(' term ( ',' term)* ')'
+    | 'COALESCE' '(' term ( ',' term )* ')'
     | 'COLLATION' '(' term ')'
     | 'DATABASE' '(' ')'
     | 'IF' '(' term ',' term ',' term ')'
-    | 'FORMAT' '(' term ',' term ( ',' term)? ')'
+    | 'FORMAT' '(' term ',' term ( ',' term )? ')'
     | 'MICROSECOND' '(' term ')'
     | 'MOD' '(' term ',' term ')'
     | 'PASSWORD' '(' term ')'
@@ -1292,26 +1286,26 @@ function
     | 'REVERSE' '(' term ')'
     | 'ROW_COUNT' '(' ')'
     | 'TRUNCATE' '(' term ',' term ')'
-    | 'WEEK' '(' term ( ',' term)? ')'
+    | 'WEEK' '(' term ( ',' term )? ')'
     | 'WEIGHT_STRING' '(' term ( 'AS' ( 'CHAR' | 'BINARY' ) '(' DECIMAL ')' )? ')'
-    | 'GEOMETRYCOLLECTION' '(' (term ( ',' term)*)? ')'
-    | 'LINESTRING' '(' term ( ',' term)* ')'
-    | 'MULTILINESTRING' '(' term ( ',' term)* ')'
-    | 'MULTIPOINT' '(' term ( ',' term)* ')'
-    | 'MULTIPOLYGON' '(' term ( ',' term)* ')'
+    | 'GEOMETRYCOLLECTION' '(' ( term ( ',' term )* )? ')'
+    | 'LINESTRING' '(' term ( ',' term )* ')'
+    | 'MULTILINESTRING' '(' term ( ',' term )* ')'
+    | 'MULTIPOINT' '(' term ( ',' term )* ')'
+    | 'MULTIPOLYGON' '(' term ( ',' term )* ')'
     | 'POINT' '(' term ',' term ')'
-    | 'POLYGON' '(' term ( ',' term)* ')'
+    | 'POLYGON' '(' term ( ',' term )* ')'
 
     | 'AVG' '(' 'DISTINCT'? 'ALL'? term ')'
     | ( 'BIT_AND' | 'BIT_OR' | 'BIT_XOR' ) '(' 'ALL'? term ')'
     | 'JSON_ARRAYAGG' '(' 'ALL'? term ')'
     | 'JSON_OBJECTAGG' '(' 'ALL'? term ',' 'ALL'? term ')'
     | 'ST_COLLECT' '(' 'DISTINCT'? 'ALL'? term ')'
-    | 'COUNT' '(' ( 'ALL'? '*' | 'ALL'? term | 'DISTINCT' term ( ',' term)* ) ')'
+    | 'COUNT' '(' ( 'ALL'? '*' | 'ALL'? term | 'DISTINCT' term ( ',' term )* ) ')'
     | ( 'MIN' | 'MAX' ) '(' 'DISTINCT'? 'ALL'? term ')'
     | ( 'STD' | 'VARIANCE' | 'STDDEV_SAMP' | 'VAR_SAMP' | 'SUM' ) '(' 'ALL'? term ')'
     | 'SUM' '(' 'DISTINCT' 'ALL'? term ')'
-    | 'GROUP_CONCAT' '(' 'DISTINCT'? term ( ',' term)* orderBy? ( 'SEPARATOR' string )? ')'
+    | 'GROUP_CONCAT' '(' 'DISTINCT'? term ( ',' term )* orderBy? ( 'SEPARATOR' string )? ')'
     ;
 
 udfExpr
@@ -1346,10 +1340,10 @@ castType
     ;
 
 dataType
-    : ( 'INT' | 'INTEGER' | 'TINYINT' | 'SMALLINT' | 'MEDIUMINT' | 'BIGINT' ) ( '(' ( DECIMAL | FLOAT ) ')' )? fieldOptions?
-    | ( 'REAL' | 'DOUBLE' 'PRECISION'? ) ( '(' DECIMAL ',' DECIMAL ')' )? fieldOptions?
-    | ( 'FLOAT' | 'DEC' | 'DECIMAL' | 'NUMERIC' | 'FIXED' ) floatOptions? fieldOptions?
-    | 'BIT' ( '(' ( DECIMAL | FLOAT ) ')' )?
+    : ( 'INT' | 'INTEGER' | 'TINYINT' | 'SMALLINT' | 'MEDIUMINT' | 'BIGINT' ) typeLength? fieldOptions*
+    | ( 'REAL' | 'DOUBLE' 'PRECISION'? ) typePrecision? fieldOptions*
+    | ( 'FLOAT' | 'DEC' | 'DECIMAL' | 'NUMERIC' | 'FIXED' ) floatOptions? fieldOptions*
+    | 'BIT' typeLength?
     | 'BOOL'
     | 'BOOLEAN'
     | ( ( 'CHAR' | 'CHARACTER' ) 'VARYING'?
@@ -1357,20 +1351,20 @@ dataType
       | 'NATIONAL'? 'VARCHAR'
       | 'NVARCHAR'
       | 'NCHAR' ( 'VARCHAR' | 'VARYING' )?
-      ) ( '(' ( DECIMAL | FLOAT ) ')' )? characterType*
+      ) typeLength? characterType*
 
-    | 'BINARY' ( '(' ( DECIMAL | FLOAT ) ')' )?
+    | 'BINARY' typeLength?
 
-    | 'VARBINARY' ( '(' ( DECIMAL | FLOAT ) ')')
+    | 'VARBINARY' typeLength
     | 'VECTOR' ( '(' DECIMAL ')' )?
 
-    | 'YEAR' ( '(' ( DECIMAL | FLOAT ) ')' )? fieldOptions?
+    | 'YEAR' typeLength? fieldOptions*
     | 'DATE'
     | 'TIME' ( '(' DECIMAL ')' )?
     | 'TIMESTAMP' ( '(' DECIMAL ')' )?
     | 'DATETIME' ( '(' DECIMAL ')' )?
     | 'TINYBLOB'
-    | 'BLOB' ( '(' ( DECIMAL | FLOAT ) ')' )?
+    | 'BLOB' typeLength?
 
     | 'GEOMETRY'
     | 'GEOMETRYCOLLECTION'
@@ -1387,23 +1381,24 @@ dataType
     | 'LONG' 'VARBINARY'
     | 'LONG' ( 'CHAR' 'VARYING' | 'VARCHAR' )? characterType?
     | 'TINYTEXT' characterType?
-    | 'TEXT' ( '(' ( DECIMAL | FLOAT ) ')' )? characterType?
+    | 'TEXT' typeLength? characterType?
     | 'MEDIUMTEXT' characterType?
     | 'LONGTEXT' characterType?
     | 'ENUM' '(' term ( ',' term )* ')' characterType?
-    | 'SET' '(' string ( ',' string)* ')' characterType?
+    | 'SET' '(' string ( ',' string )* ')' characterType?
     | 'LONG' characterType?
     | 'SERIAL'
     | 'JSON'
 
     | ( 'FLOAT4'
-    | 'FLOAT8'
-    | 'INT1'
-    | 'INT2'
-    | 'INT3'
-    | 'INT4'
-    | 'INT8'
-    | 'MIDDLEINT' ) fieldOptions?
+      | 'FLOAT8'
+      | 'INT1'
+      | 'INT2'
+      | 'INT3'
+      | 'INT4'
+      | 'INT8'
+      | 'MIDDLEINT' 
+      ) fieldOptions*
     ;
 
 charsetName
@@ -1446,7 +1441,7 @@ compoundStatement
     : statement
     | 'RETURN' term
     | 'IF' ifBody 'END' 'IF'
-    | 'CASE' term? ( 'WHEN' term thenStatement)+ ( 'ELSE' (compoundStatement ';' )+)? 'END' 'CASE'
+    | 'CASE' term? ( 'WHEN' term thenStatement )+ ( 'ELSE' ( compoundStatement ';' )+ )? 'END' 'CASE'
     | name ':' beginEndBlock name?
     | beginEndBlock
     | name ':' unlabeledControl name?
@@ -1454,7 +1449,7 @@ compoundStatement
     | 'LEAVE' name
     | 'ITERATE' name
     | 'OPEN' name
-    | 'FETCH' ( 'NEXT'? 'FROM' )? name 'INTO' name ( ',' name)*
+    | 'FETCH' ( 'NEXT'? 'FROM' )? name 'INTO' name ( ',' name )*
     | 'CLOSE' name
     ;
 
@@ -1483,7 +1478,7 @@ repeatUntilBlock
     : 'REPEAT' ( compoundStatement ';' )+ 'UNTIL' term 'END' 'REPEAT' ;
 
 spDeclaration
-    : 'DECLARE' name ( ',' name)* dataType collate? ( 'DEFAULT' term)?
+    : 'DECLARE' name ( ',' name )* dataType collate? ( 'DEFAULT' term )?
     | 'DECLARE' name 'CONDITION' 'FOR' spCondition
     | 'DECLARE' ( 'CONTINUE' | 'EXIT' | 'UNDO' ) 'HANDLER' 'FOR' handlerCondition ( ',' handlerCondition )* compoundStatement
     | 'DECLARE' name 'CURSOR' 'FOR' select
@@ -1528,19 +1523,19 @@ signalName
 
 schedule
     : 'AT' term
-    | 'EVERY' term timeUnitToo ( 'STARTS' term)? ( 'ENDS' term)?
+    | 'EVERY' term timeUnitToo ( 'STARTS' term )? ( 'ENDS' term )?
     ;
 
 constraintEnforcement
     : 'NOT'? 'ENFORCED' ;
 
 tableConstraintDef
-    : indexKey indexNameAndType? '(' keyPart ( ',' keyPart)* ')' indexOption*
-    | 'FULLTEXT' indexKey? name? '(' keyPart ( ',' keyPart)* ')' indexOption*
-    | 'SPATIAL' indexKey? name? '(' keyPart ( ',' keyPart)* ')' indexOption*
+    : indexKey indexNameAndType? '(' keyPart ( ',' keyPart )* ')' indexOption*
+    | 'FULLTEXT' indexKey? name? '(' keyPart ( ',' keyPart )* ')' indexOption*
+    | 'SPATIAL' indexKey? name? '(' keyPart ( ',' keyPart )* ')' indexOption*
     | ( 'CONSTRAINT' name?)?
-        ( ( 'CLUSTERING' 'KEY' | 'PRIMARY' 'KEY' | 'UNIQUE' indexKey?) indexNameAndType? '(' keyPart ( ',' keyPart)* ')' indexOption*
-        | 'FOREIGN' 'KEY' name? '(' keyPart ( ',' keyPart)* ')' referenceDef
+        ( ( 'CLUSTERING' 'KEY' | 'PRIMARY' 'KEY' | 'UNIQUE' indexKey?) indexNameAndType? '(' keyPart ( ',' keyPart )* ')' indexOption*
+        | 'FOREIGN' 'KEY' name? '(' keyPart ( ',' keyPart )* ')' referenceDef
         | 'CHECK' '(' term ')' constraintEnforcement?
         )
     ;
@@ -1588,14 +1583,13 @@ referenceOption
     ;
 
 keyPart
-    : ( name ( '(' ( DECIMAL | FLOAT ) ')' )? | '(' term ')' ) direction? ;
+    : ( name typeLength? | '(' term ')' ) direction? ;
 
 visibility
     : 'VISIBLE' | 'INVISIBLE' ;
 
 fieldOptions
-    : ( 'SIGNED' | 'UNSIGNED' | 'ZEROFILL' )+
-    ;
+    : 'SIGNED' | 'UNSIGNED' | 'ZEROFILL' ;
 
 characterType
     : 'BYTE'
@@ -1637,20 +1631,17 @@ tableOption
     | 'UNION' '='? '(' ( qname ( ',' qname )* )? ')'
     | 'TRANSACTIONAL' '='? DECIMAL
     | 'TABLE_TYPE' '='? name
-//    | 'TABLE_CHECKSUM' '='? INTEGER
     ;
 
 ternaryOption
-    : DECIMAL
-    | 'DEFAULT'
-    ;
+    : DECIMAL | 'DEFAULT' ;
 
 partitionBy
     : 'PARTITION' 'BY'
       ( hash
       | ( 'RANGE' | 'LIST' )
           ( '(' term ')'
-          | 'COLUMNS' '(' (name ( ',' name)*)? ')'
+          | 'COLUMNS' '(' ( name ( ',' name )* )? ')'
           )
       )
       ( 'PARTITIONS' DECIMAL )?
@@ -1673,7 +1664,7 @@ partitionDef
             )
         )?
         partitionOption*
-        ( '(' subpartition ( ',' subpartition)* ')' )?
+        ( '(' subpartition ( ',' subpartition )* ')' )?
     ;
 
 partitionOption
@@ -1686,8 +1677,7 @@ partitionOption
     ;
 
 subpartition
-    : 'SUBPARTITION' name partitionOption*
-    ;
+    : 'SUBPARTITION' name partitionOption* ;
 
 definer
     : 'DEFINER' '=' user ;
@@ -1719,8 +1709,7 @@ lineHandling
     : 'LINES' ( ( 'STARTING' | 'TERMINATED' ) 'BY' string )+ ;
 
 userAuthID
-    : user ( identified ( 'AND' identified ( 'AND' identified )? )? )?
-    ;
+    : user ( identified ( 'AND' identified ( 'AND' identified )? )? )? ;
 
 identified
     : 'IDENTIFIED' 'BY' name
@@ -1731,10 +1720,10 @@ identified
     | 'IDENTIFIED' 'WITH' name 'AS' name
     ;
 
+// TODO replace w/ rule identified
 alterAuthOption
-    : 'IDENTIFIED' 'WITH' name ( 'AS' name)?
+    : 'IDENTIFIED' 'WITH' name ( 'AS' name )?
     | 'IDENTIFIED' ( 'WITH' name )? ( 'BY' | 'AS' )
-//      ( name | 'RANDOM' 'PASSWORD' ) ( 'REPLACE' qname)? retainCurrentPassword?
       ( name | 'RANDOM' 'PASSWORD' ) ( 'REPLACE' string )? retainCurrentPassword?
     | 'DISCARD' 'OLD' 'PASSWORD'
     ;
@@ -1752,38 +1741,28 @@ factor
     : DECIMAL 'FACTOR' ;
 
 user
-    : userName
+    : name ( '@' | qname )?
     | 'CURRENT_USER' ( '(' ')' )?
     ;
 
-userName
-    : name ( '@' | qname )? ;
-
 like
-    : 'LIKE' name
-    | where
-    ;
+    : 'LIKE' name | where ;
 
 onlineOption
-    : 'ONLINE'
-    | 'OFFLINE'
-    ;
+    : 'ONLINE' | 'OFFLINE' ;
 
 noLogging
-    : 'LOCAL'
-    | 'NO_WRITE_TO_BINLOG'
-    ;
+    : 'LOCAL' | 'NO_WRITE_TO_BINLOG' ;
 
 partition
-    : 'PARTITION' '(' name ( ',' name)* ')' ;
+    : 'PARTITION' '(' name ( ',' name )* ')' ;
 
+// TODO inline this?
 columns
-    : '(' name ( ',' name)* ')' ;
+    : '(' name ( ',' name )* ')' ;
 
 qname
-    : ( '.'? name | LOCAL | GLOBAL )
-      ( '.' name ( '.' name )? )?
-    ;
+    : ( '.'? name | LOCAL | GLOBAL ) ( '.' name ( '.' name )? )? ;
 
 literal
     : ID
@@ -1811,10 +1790,6 @@ string
     | '<secret>'
     ;
 
-strings
-    : string ( ',' string)*
-    ;
-
 null
     : 'NULL' | NOPE ;
 
@@ -1822,13 +1797,13 @@ datetime
     : ( 'DATE' | 'TIME' | 'TIMESTAMP' ) string ;
 
 floatOptions
-    : typeLength
-    | typePrecision
-    ;
+    : typeLength | typePrecision ;
 
-typePrecision : '(' DECIMAL ',' DECIMAL ')' ;
+typePrecision
+    : '(' DECIMAL ',' DECIMAL ')' ;
 
-typeLength : '(' ( DECIMAL | FLOAT ) ')' ;
+typeLength
+    : '(' ( DECIMAL | FLOAT ) ')' ;
 
 name
     : ID
@@ -2585,7 +2560,7 @@ PARAM
     : '?' ;
 
 HEXADECIMAL
-    : '0x' BASE16+ ;
+    : '0x' BASE16 ;
 
 DECIMAL
     : BASE10 ;
@@ -2627,8 +2602,8 @@ ID
     ;
 
 BLOB
-    : 'x\'' BASE16* '\''
-    | 'b\'' BASE2* '\''
+    : 'x\'' BASE16? '\''
+    | 'b\'' BASE2? '\''
     ;
 
 // MySQL synonym for NULL. A separate token from 'NULL'
@@ -2637,36 +2612,39 @@ NOPE options { caseInsensitive = false; }
     : '\\N' ;
 
 MYSQL_COMMENT
-    : '/*!' ( BLOCK_COMMENT | . )*?  '*/' -> channel(HIDDEN);
+    : '/*!' ( BLOCK_COMMENT | . )*?  '*/' -> channel( HIDDEN );
 
 BLOCK_COMMENT
-    : '/*' ~[!] .*? '*/' -> channel(HIDDEN);
+    : '/*' ~[!] .*? '*/' -> channel( HIDDEN );
 
 // Another MySQL-ism...?
 POUND_COMMENT
-    : '#' ~[\n\r]* -> channel(HIDDEN) ;
+    : '#' ~[\n\r]* -> channel( HIDDEN ) ;
 
 COMMENT
     // MySQL requires whitespace before comment
-    : '--' ( [ \t] ~[\n\r]* | [\n\r] | EOF ) -> channel(HIDDEN)
+    : '--' ( [ \t] ~[\n\r]* | [\n\r] | EOF ) -> channel( HIDDEN )
     // Playing around with variations, to see which I prefer.
-//    : '--' ( [ \t] .*? )? ( [\n\r] | EOF ) -> channel(HIDDEN)
+//    : '--' ( [ \t] .*? )? ( [\n\r] | EOF ) -> channel( HIDDEN )
     ;
 
 WHITESPACE
-    : [ \t\f\r\n]+ -> channel(HIDDEN)
-    ;
+    : [ \t\f\r\n]+ -> channel( HIDDEN ) ;
 
-fragment IPV4 : BASE10 '.' BASE10 '.' BASE10 '.' BASE10;
+fragment IPV4 
+    : BASE10 '.' BASE10 '.' BASE10 '.' BASE10;
 
-fragment IPV6 :  (  GROUPS? '::' )? GROUPS ;
+fragment IPV6 
+    : ( GROUPS? '::' )? GROUPS ;
 
-fragment GROUPS : GROUP ( ':' GROUP )* ;
+fragment GROUPS 
+    : BASE16 ( ':' BASE16 )* ;
 
-fragment GROUP : BASE16+ ;
+fragment BASE2 
+    : [01]+ ;
 
-fragment BASE2 : [01]+ ;
+fragment BASE10 
+    : [0-9]+ ;
 
-fragment BASE10 : [0-9]+ ;
-
-fragment BASE16 : [0-9A-F] ;
+fragment BASE16 
+    : [0-9A-F]+ ;
