@@ -404,11 +404,10 @@ logfileOptions
     | ( 'WAIT' | 'NO_WAIT' ) ;
 
 logfileGroupOption
-    : 'INITIAL_SIZE' '='? byteSize
-    | ( 'UNDO_BUFFER_SIZE' | 'REDO_BUFFER_SIZE' ) '='? byteSize
+    : logfileOptions
+    | 'UNDO_BUFFER_SIZE' '='? byteSize
+    | 'REDO_BUFFER_SIZE' '='? byteSize
     | 'NODEGROUP' '='? DECIMAL
-    | 'STORAGE'? 'ENGINE' '='? name
-    | ( 'WAIT' | 'NO_WAIT' )
     | 'COMMENT' '='? string
     ;
 
