@@ -1151,7 +1151,7 @@ explainable
     ;
 
 term
-    : 'ROW'? '(' term ( ',' term )* ')'
+    : 'ROW'? '(' ( term ( ',' term )* )? ')'
     | qname
     | literal
     | term ( '->' | '->>' ) string
