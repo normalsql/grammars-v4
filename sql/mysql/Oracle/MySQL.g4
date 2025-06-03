@@ -143,15 +143,24 @@ options {
 statements
     : statement? ( ( ';' | '#end' ) statement? )* EOF ;
 
+comment
+    : 'COMMENT' string ;
+
+attribute
+    : 'ATTRIBUTE' string ;
+
+database_
+    : 'DATABASE' | 'SCHEMA' ;
+
 statement
-    : 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? name databaseOption*
-    | 'ALTER' ( 'DATABASE' | 'SCHEMA' ) qname databaseOption+
-    | 'DROP' ( 'DATABASE' | 'SCHEMA' ) exists? qname
+    : 'CREATE' database_ notExists? name databaseOption*
+    | 'ALTER' database_ qname databaseOption+
+    | 'DROP' database_ exists? qname
 
     | 'CREATE' definer? 'EVENT' notExists? qname
-      'ON' 'SCHEDULE' schedule ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ( 'ENABLE' | 'DISABLE' ( 'ON' 'REPLICA' )?)? ( 'COMMENT' string )? 'DO' compoundStatement
+      'ON' 'SCHEDULE' schedule ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ( 'ENABLE' | 'DISABLE' ( 'ON' 'REPLICA' )? )? comment? 'DO' compoundStatement
     | 'ALTER' definer? 'EVENT' qname
-       ( 'ON' 'SCHEDULE' schedule )? ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ( 'RENAME' 'TO' qname )? ( 'ENABLE' | 'DISABLE' ( 'ON' 'REPLICA' )? )? ( 'COMMENT' string )? ( 'DO' compoundStatement )?
+       ( 'ON' 'SCHEDULE' schedule )? ( 'ON' 'COMPLETION' 'NOT'? 'PRESERVE' )? ( 'RENAME' 'TO' qname )? ( 'ENABLE' | 'DISABLE' ( 'ON' 'REPLICA' )? )? comment? ( 'DO' compoundStatement )?
     | 'DROP' 'EVENT' exists? qname
 
     | 'CREATE' definer? 'FUNCTION' notExists? qname '(' ( functionParameter ( ',' functionParameter )* )? ')' 'RETURNS' dataType collate? routineCreateOption* storedRoutineBody
@@ -164,10 +173,9 @@ statement
     | 'DROP' 'PROCEDURE' exists? qname
 
     | 'CREATE' ( 'UNIQUE' | 'FULLTEXT' | 'SPATIAL' )? 'INDEX' qname indexType? 'ON' qname
-      '(' keyPart ( ',' keyPart )* ')' createIndexOption* ( algorithmName | lockName )*
+      '(' keyPart ( ',' keyPart )* ')' (indexOption)* commonIndexOption*
 
-    | 'DROP' onlineOption? 'INDEX' qname 'ON' qname
-      ( algorithmName | lockName )*
+    | 'DROP' onlineOption? 'INDEX' qname 'ON' qname commonIndexOption*
 
     | 'ALTER' 'LOGFILE' 'GROUP' qname 'ADD' 'UNDOFILE' string ( logfileCreateOptions ( ','? logfileCreateOptions )* )?
     | 'CREATE' 'LOGFILE' 'GROUP' qname 'ADD' 'UNDOFILE' string ( logfileAlterOption ( ','? logfileAlterOption )* )?
@@ -188,7 +196,7 @@ statement
 
     | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname
       ( '(' ( createDef  | tableConstraintDef ) ( ',' ( createDef  | tableConstraintDef ) )* ')' )?
-      ( tableCreateOption ( ','? tableCreateOption )* )? partitionBy? (('REPLACE' | 'IGNORE' )? 'AS'? select )?
+      ( tableCreateOption ( ','? tableCreateOption )* )? partitionBy? (( 'REPLACE' | 'IGNORE' )? 'AS'? select )?
 
     | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ( 'LIKE' qname | '(' 'LIKE' qname ')' )
     | 'ALTER' onlineOption? 'TABLE' qname ( tableAlterOption ( ','? tableAlterOption )* )?
@@ -207,18 +215,15 @@ statement
       require?
       resourceWith?
       passwordOption*
-      ( 'COMMENT' string | 'ATTRIBUTE' string )*
+      ( comment | 'ATTRIBUTE' string )*
 
     | 'ALTER' 'USER' exists? user alterAuthOption? ( ',' user alterAuthOption? )*
       require?
       resourceWith?
       passwordOption*
-      ( 'COMMENT' string | 'ATTRIBUTE' string )*
+      ( comment | 'ATTRIBUTE' string )*
 
-    | 'ALTER' 'USER' exists? 'USER' '(' ')'
-      ( 'IDENTIFIED' 'BY' string ( 'REPLACE' string )? retainCurrentPassword?
-      | 'DISCARD' 'OLD' 'PASSWORD'
-      )
+    | 'ALTER' 'USER' exists? 'USER' '(' ')' alterAuthOption
 
     | 'ALTER' 'USER' exists? ( 'USER' '(' ')' | user ) ( DECIMAL 'FACTOR' )?
 
@@ -227,7 +232,7 @@ statement
     | 'DROP' 'USER' exists? user ( ',' user )*
     | 'RENAME' 'USER' user 'TO' user ( ',' user 'TO' user )*
 
-    | 'CREATE' ( 'OR' 'REPLACE' )? viewAlgorithm? definer? security?
+    | 'CREATE' orReplace_? viewAlgorithm? definer? security?
       'VIEW' notExists?  qname columns? 'AS' select viewCheckOption?
     | 'ALTER' viewAlgorithm? definer? security? 'VIEW' qname columns? 'AS' select viewCheckOption?
     | 'DROP' 'VIEW' exists? qname ( ',' qname )* ( 'RESTRICT' | 'CASCADE' )?
@@ -241,7 +246,7 @@ statement
         | 'RELOAD' 'KEYRING'
         )
 
-    | 'CREATE' orReplace? 'SPATIAL' 'REFERENCE' 'SYSTEM' notExists? DECIMAL srsAttribute*
+    | 'CREATE' orReplace_? 'SPATIAL' 'REFERENCE' 'SYSTEM' notExists? DECIMAL srsAttribute*
     | 'DROP' 'SPATIAL' 'REFERENCE' 'SYSTEM' exists? DECIMAL
 
 
@@ -299,7 +304,7 @@ statement
     | 'SET' setter ( ',' setter )*
     | 'SET' 'NAMES' ( equal term | qname collate? | 'DEFAULT' )
     | 'SET' ( 'GLOBAL' | 'SESSION' )? 'TRANSACTION' transactionCharacteristics ( ',' transactionCharacteristics )*
-    | 'SET' 'PASSWORD' ( 'FOR' user )? ( equal string | 'TO' 'RANDOM' ) ( 'REPLACE' string )? retainCurrentPassword?
+    | 'SET' 'PASSWORD' ( 'FOR' user )? ( equal string | 'TO' 'RANDOM' ) replaceString? retainCurrentPassword?
     | 'SET' charset qname
 
     | 'TRUNCATE' 'TABLE'? qname
@@ -314,7 +319,7 @@ statement
     | 'SHOW' ( 'FULL' | 'EXTENDED' 'FULL'? )? ( 'FIELDS' | 'COLUMNS' ) inDb inDb? like?
     | 'SHOW' 'COUNT' '(' '*' ')' ( 'WARNINGS' | 'ERRORS' )
 
-    | 'SHOW' 'CREATE' ( 'DATABASE' | 'SCHEMA' ) notExists? qname
+    | 'SHOW' 'CREATE' database_ notExists? qname
     | 'SHOW' 'CREATE' 'EVENT' qname
     | 'SHOW' 'CREATE' 'FUNCTION' qname
     | 'SHOW' 'CREATE' 'FUNCTION' 'CODE' qname
@@ -327,7 +332,7 @@ statement
     | 'SHOW' 'CREATE' 'VIEW' qname
 
     | 'SHOW' 'DATABASES' like?
-    | 'SHOW' 'ENGINE' qname ( 'LOGS' | 'MUTEX' | 'STATUS')
+    | 'SHOW' 'ENGINE' qname ( 'LOGS' | 'MUTEX' | 'STATUS' )
     | 'SHOW' 'STORAGE'? 'ENGINES'
     | 'SHOW' 'ERRORS' limit?
     | 'SHOW' 'EVENTS' inDb? like?
@@ -351,7 +356,7 @@ statement
     | 'SHOW' 'REPLICA' 'HOSTS'
     | 'SHOW' scope? 'STATUS' like?
     | 'SHOW' 'TABLE' 'STATUS' inDb? like?
-    | 'SHOW' ( 'FULL' | 'EXTENDED' 'FULL'?)? 'TABLES' inDb? like?
+    | 'SHOW' ( 'FULL' | 'EXTENDED' 'FULL'? )? 'TABLES' inDb? like?
     | 'SHOW' 'FULL'? 'TRIGGERS' inDb? like?
     | 'SHOW' scope? 'VARIABLES' like?
     | 'SHOW' 'WARNINGS' limit?
@@ -367,11 +372,11 @@ statement
     | 'CACHE' 'INDEX' keyCacheListOrParts 'IN' qname
     | 'FLUSH' noLogging? ( flushTables | flushOption ( ',' flushOption )* )
     | 'KILL' ( 'CONNECTION' | 'QUERY' )? term
-    | 'LOAD' 'INDEX' 'INTO' 'CACHE' preloadTail
+    | 'LOAD' 'INDEX' 'INTO' 'CACHE' preloadKeys ( ',' preloadKeys )*
 
-    | 'CREATE' 'LIBRARY' notExists? qname ( 'LANGUAGE' name | 'COMMENT' string )+ 'AS' string
+    | 'CREATE' 'LIBRARY' notExists? qname ( 'LANGUAGE' name | comment )+ 'AS' string
     | 'DROP' 'LIBRARY' exists? qname
-    | 'ALTER' 'LIBRARY' exists? qname ( 'COMMENT' string )?
+    | 'ALTER' 'LIBRARY' exists? qname comment?
 
     | ( 'EXPLAIN' | 'DESCRIBE' | 'DESC' ) qname qname ?
 
@@ -379,7 +384,7 @@ statement
       'ANALYZE'?
       ( 'FORMAT' '=' ( 'TRADITIONAL' | 'JSON' | 'TREE' | string ) )?
       ( 'INTO' qname )?
-      ( ( 'FOR' ( 'DATABASE' | 'SCHEMA' ) name )? explainable
+      ( ( 'FOR' database_ name )? explainable
       | 'FOR' 'CONNECTION' DECIMAL
       )
 
@@ -393,6 +398,14 @@ statement
 
     | beginWork
     ;
+
+commonIndexOption
+    : 'ALGORITHM' '='? name
+    | 'LOCK' '='? name
+    ;
+
+replaceString
+    : 'REPLACE' string ;
 
 explainable
     : select
@@ -453,7 +466,7 @@ storedRoutineBody
     ;
 
 routineCreateOption
-    : 'COMMENT' string
+    : comment
     | 'LANGUAGE' name
     | 'NOT'? 'DETERMINISTIC'
     | 'CONTAINS' 'SQL'
@@ -464,31 +477,15 @@ routineCreateOption
     | 'USING' '(' qname ( ',' qname )*')'
     ;
 
-createIndexOption
-    : 'KEY_BLOCK_SIZE' '='? DECIMAL
-    | indexType
-    | 'WITH' 'PARSER' name
-    | 'COMMENT' string
-    | visibility
-    | 'ENGINE_ATTRIBUTE' '='? string
-    | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
-    ;
-
 indexOption
     : 'KEY_BLOCK_SIZE' '='? DECIMAL
     | indexType
     | 'WITH' 'PARSER' name
-    | 'COMMENT' string
+    | comment
     | visibility
     | 'ENGINE_ATTRIBUTE' '='? string
     | 'SECONDARY_ENGINE_ATTRIBUTE' '='? string
     ;
-
-lockName
-    : 'LOCK' '='? name ;
-
-algorithmName
-    : 'ALGORITHM' '='? name ;
 
 // TODO verify how this is used. there's overlap with
 indexNameAndType
@@ -502,14 +499,13 @@ indexType
 referenceDef
     : 'REFERENCES' qname ( '(' name ( ',' name )* ')' )?
       ( 'MATCH' ( 'FULL' | 'PARTIAL' | 'SIMPLE' ) )?
-        ( referenceOption referenceOption? )?
+      ( referenceOption referenceOption? )?
     ;
 
 referenceOption
     : 'ON' ( 'UPDATE' | 'DELETE' )
       ( 'RESTRICT' | 'CASCADE' | 'SET' null | 'SET' 'DEFAULT' | 'NO' 'ACTION' )
     ;
-
 
 serverOption
     : 'HOST' string
@@ -527,7 +523,7 @@ viewAlgorithm
 security
     : 'SQL' 'SECURITY' ( 'DEFINER' | 'INVOKER' ) ;
 
-orReplace
+orReplace_
     : 'OR' 'REPLACE' ;
 
 srsAttribute
@@ -539,10 +535,10 @@ srsAttribute
 
 delete
     : with? 'DELETE' 'LOW_PRIORITY'? 'QUICK'? 'IGNORE'?
-        ( 'FROM' qname tableAlias? ( 'PARTITION' '(' name ( ',' name )* ')' )? where? orderBy? limitCount?
-        | wild ( ',' wild )* 'FROM' tableReferenceList where?
-        | 'FROM' wild ( ',' wild )* 'USING' tableReferenceList where?
-        )
+      ( 'FROM' qname tableAlias? ( 'PARTITION' '(' name ( ',' name )* ')' )? where? orderBy? limitCount?
+      | wild ( ',' wild )* 'FROM' tableReferenceList where?
+      | 'FROM' wild ( ',' wild )* 'USING' tableReferenceList where?
+      )
     ;
 
     wild : qname ( '.' '*' )? ;
@@ -550,15 +546,15 @@ delete
 handlerReadOrScan
     : ( 'FIRST' | 'NEXT' )
     | name
-        ( ( 'FIRST' | 'NEXT' | 'PREV' | 'LAST' )
-        | ( '=' | '<' | '>' | '<=' | '>=' ) terms
-        )
+      ( ( 'FIRST' | 'NEXT' | 'PREV' | 'LAST' )
+      | ( '=' | '<' | '>' | '<=' | '>=' ) terms
+      )
     ;
 
 replace
     : 'REPLACE' ( 'LOW_PRIORITY' | 'DELAYED' )?
-       'INTO'? qname partition?
-       ( insertFromConstructor | 'SET' setter ( ',' setter )* | insertQueryExpression )?
+      'INTO'? qname partition?
+      ( insertFromConstructor | 'SET' setter ( ',' setter )* | insertQueryExpression )?
     ;
 
 insert
@@ -622,7 +618,9 @@ selectCore
     ;
 
 modifier
-    : 'ALL' | 'DISTINCT' | 'DISTINCTROW'
+    : 'ALL'
+    | 'DISTINCT'
+    | 'DISTINCTROW'
     | 'HIGH_PRIORITY'
     | 'STRAIGHT_JOIN'
     | 'SQL_SMALL_RESULT'
@@ -640,10 +638,10 @@ limitCount
 
 into
     : 'INTO'
-        ( 'OUTFILE' string charsetName? fieldHandling? lineHandling?
-        | 'DUMPFILE' string
-        | qname ( ',' qname )*
-        )
+      ( 'OUTFILE' string charsetName? fieldHandling? lineHandling?
+      | 'DUMPFILE' string
+      | qname ( ',' qname )*
+      )
     ;
 
 having
@@ -940,25 +938,25 @@ exceptRoleList
 
 withRoles
     : 'WITH' 'ROLE'
-        ( roleList
-        | 'ALL' exceptRoleList?
-        | 'NONE'
-        | 'DEFAULT'
-        )
+      ( roleList
+      | 'ALL' exceptRoleList?
+      | 'NONE'
+      | 'DEFAULT'
+      )
     ;
 
 revokeStatement
     : 'REVOKE' exists?
-        ( roleOrPrivilegesList 'FROM' user ( ',' user )*
-        | roleOrPrivilegesList 'ON' aclType? grantIdentifier 'FROM' user ( ',' user )*
-        | 'ALL' 'PRIVILEGES'?
-            ( 'ON' aclType? grantIdentifier
-            | ',' 'GRANT' 'OPTION'
-            )
-            'FROM' user ( ',' user )*
-        | 'PROXY' 'ON' user 'FROM' user ( ',' user )*
+      ( roleOrPrivilegesList 'FROM' user ( ',' user )*
+      | roleOrPrivilegesList 'ON' aclType? grantIdentifier 'FROM' user ( ',' user )*
+      | 'ALL' 'PRIVILEGES'?
+        ( 'ON' aclType? grantIdentifier
+        | ',' 'GRANT' 'OPTION'
         )
-        ( 'IGNORE' 'UNKNOWN' 'USER' )?
+        'FROM' user ( ',' user )*
+      | 'PROXY' 'ON' user 'FROM' user ( ',' user )*
+      )
+      ( 'IGNORE' 'UNKNOWN' 'USER' )?
     ;
 
 aclType
@@ -999,9 +997,9 @@ roleList
 
 histogram
     : 'UPDATE' 'HISTOGRAM' 'ON' name
-        ( ( ',' name )* ( 'WITH' DECIMAL 'BUCKETS' )? ( ( 'MANUAL' | 'AUTO' )? 'UPDATE' )?
-        | ( 'USING' 'DATA' string )?
-        )
+      ( ( ',' name )* ( 'WITH' DECIMAL 'BUCKETS' )? ( ( 'MANUAL' | 'AUTO' )? 'UPDATE' )?
+      | ( 'USING' 'DATA' string )?
+      )
     | 'DROP' 'HISTOGRAM' 'ON' name ( ',' name )*
     ;
 
@@ -1018,10 +1016,10 @@ repairType
 
 transactionCharacteristics
     : 'ISOLATION' 'LEVEL'
-        ( 'REPEATABLE' 'READ'
-        | 'READ' ( 'COMMITTED' | 'UNCOMMITTED' )
-        | 'SERIALIZABLE'
-        )
+      ( 'REPEATABLE' 'READ'
+      | 'READ' ( 'COMMITTED' | 'UNCOMMITTED' )
+      | 'SERIALIZABLE'
+      )
     | 'READ' ( 'WRITE' | 'ONLY' )
     ;
 
@@ -1068,16 +1066,8 @@ flushTables
 table_
     : 'TABLE' | 'TABLES' ;
 
-preloadTail
-    : qname adminPartition cacheKeyList? ( 'IGNORE' 'LEAVES' )?
-    | preloadKeys ( ',' preloadKeys )*
-    ;
-
 preloadKeys
-    : qname cacheKeyList? ( 'IGNORE' 'LEAVES' )? ;
-
-adminPartition
-    : 'PARTITION' '(' allOrPartitionNameList ')' ;
+    : qname ( 'PARTITION' '(' allOrPartitionNameList ')' )? cacheKeyList? ( 'IGNORE' 'LEAVES' )? ;
 
 resourceGroupVcpuList
     : 'VCPU' equal? range ( ','? range )* ;
@@ -1487,7 +1477,7 @@ columnAttribute
     | 'SERIAL' 'DEFAULT' 'VALUE'
     | 'PRIMARY'? 'KEY'
     | 'UNIQUE' 'KEY'?
-    | 'COMMENT' string
+    | comment
     | 'COLUMN_FORMAT' ( 'FIXED' | 'DYNAMIC' | 'DEFAULT' )
     | 'STORAGE' ( 'DISK' | 'MEMORY' | 'DEFAULT' )
     | 'SRID' DECIMAL
@@ -1586,9 +1576,8 @@ decimalDefault
     : DECIMAL | 'DEFAULT' ;
 
 tableAlterOption
-    : 'ALGORITHM' '='? name
-    | 'LOCK' '='? name
-    | ( 'WITH' | 'WITHOUT' ) 'VALIDATION'
+    : commonIndexOption
+    | validation_
 
     | 'ADD' 'COLUMN'?  createDef  place?
     | 'CHANGE' 'COLUMN'? name createDef place?
@@ -1701,25 +1690,11 @@ userAuthID
 
 identified
     : 'IDENTIFIED' 'WITH' qname ( 'AS' qname )?
-    | 'IDENTIFIED' ( 'WITH' qname )? ( 'BY' qname | 'RANDOM' 'PASSWORD' )
+    | 'IDENTIFIED' ( 'WITH' qname )? ( 'BY' ( qname | 'RANDOM' 'PASSWORD' ))
     ;
 
-//identified
-//    : 'IDENTIFIED' 'BY' name
-//    | 'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD'
-//    | 'IDENTIFIED' 'WITH' name
-//    | 'IDENTIFIED' 'WITH' name 'BY' name
-//    | 'IDENTIFIED' 'WITH' name 'BY' 'RANDOM' 'PASSWORD'
-//    | 'IDENTIFIED' 'WITH' name 'AS' name
-//    ;
-
-// TODO replace w/ rule identified?
 alterAuthOption
-    : 'IDENTIFIED' 'WITH' name ( 'AS' name )?
-    | 'IDENTIFIED' ( 'WITH' name )? ( 'BY' name | 'RANDOM' 'PASSWORD' )
-      ( 'REPLACE' string )? retainCurrentPassword?
-//    | 'IDENTIFIED' ( 'WITH' name )? ( 'BY' | 'AS' )
-//      ( name | 'RANDOM' 'PASSWORD' ) ( 'REPLACE' string )? retainCurrentPassword?
+    : identified replaceString? retainCurrentPassword?
     | 'DISCARD' 'OLD' 'PASSWORD'
     ;
 
