@@ -95,9 +95,6 @@ grammar MySQL;
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
  */
 
-
-
-
 /**
 
    I have no idea how to accomodate MySQL extensions.
@@ -136,9 +133,6 @@ grammar MySQL;
      - Incorrectly discerns some numbers vs identifiers (that begin w/ digit)
 
        - eg "SELECT 1ea10.1a20" yields an ID, FLOAT, and ID. Should just be ID.
-
-
-
 
 */
 
@@ -283,7 +277,7 @@ statement
 
     | 'CLONE' 'LOCAL' 'DATA' 'DIRECTORY' equal? string
     | 'CLONE' 'REMOTE' ( 'FOR' 'REPLICATION' )?
-    | 'CLONE' 'INSTANCE' 'FROM' user ':' DECIMAL 'IDENTIFIED' 'BY' name ( ssl | 'DATA' 'DIRECTORY' equal? string ssl?)?
+    | 'CLONE' 'INSTANCE' 'FROM' user ':' DECIMAL 'IDENTIFIED' 'BY' name ( ssl | 'DATA' 'DIRECTORY' equal? string ssl? )?
 
     | grantStatement
     | revokeStatement
@@ -415,7 +409,6 @@ dropLogfileGroupOption
     : ( 'WAIT' | 'NO_WAIT' )
     | 'STORAGE'? 'ENGINE' '='? name
     ;
-
 
 alterTableAction
     : 'ALGORITHM' '='? name
