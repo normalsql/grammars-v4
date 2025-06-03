@@ -1153,37 +1153,20 @@ fulltextOptions
     ;
 
 function
-    // Function names that are keywords.
     : ID '(' ( udfExpr ( ',' udfExpr )* )? ')'
+    // TODO embue with essence of windowing
     | qname '(' ( term ( ',' term )* )? ')'
 
     | 'CHAR' '(' term ( ',' term )* ( 'USING' name )? ')'
     | 'CURRENT_USER' ( '(' ')' )?
-    | 'DATE' '(' term ')'
-    | 'DAY' '(' term ')'
-    | 'HOUR' '(' term ')'
-    | 'INSERT' '(' term ',' term ',' term ',' term ')'
-    | 'INTERVAL' '(' term ( ',' term )+ ')'
     | 'JSON_VALUE' '(' term ',' string ( 'RETURNING' castType )? ( jsonResponse jsonResponse? )? ')'
-    | 'LEFT' '(' term ',' term ')'
-    | 'MINUTE' '(' term ')'
-    | 'MONTH' '(' term ')'
-    | 'RIGHT' '(' term ',' term ')'
-    | 'SECOND' '(' term ')'
-    | 'TIME' '(' term ')'
-    | 'TIMESTAMP' '(' term ( ',' term )? ')'
     | 'TRIM' '(' ( term ( 'FROM' term )? | 'LEADING' term? 'FROM' term | 'TRAILING' term? 'FROM' term | 'BOTH' term? 'FROM' term ) ')'
-    | 'USER' '(' ')'
-    | 'YEAR' '(' term ')'
 
-    // Function names that are not keywords.
-    | ( 'ADDDATE' | 'SUBDATE' ) '(' term ',' term ')'
     | 'CURDATE' ( '(' ')' )?
     | 'CURTIME' ( '(' DECIMAL? ')' )?
     | ( 'DATE_ADD' | 'DATE_SUB' ) '(' term ',' interval ')'
     | 'EXTRACT' '(' timeUnitToo 'FROM' term ')'
     | 'GET_FORMAT' '(' ( 'DATE' | 'TIME' | 'DATETIME' | 'TIMESTAMP' ) ',' term ')'
-    | 'LOG' '(' term ( ',' term )? ')'
     | now
     | 'POSITION' '(' term 'IN' term ')'
     | 'SUBSTRING' '(' term ( ',' term ( ',' term )? | 'FROM' term ( 'FOR' term )? ) ')'
@@ -1193,32 +1176,7 @@ function
     | 'UTC_TIME' ( '(' DECIMAL? ')' )?
     | 'UTC_TIMESTAMP' ( '(' DECIMAL? ')' )?
 
-    | 'ASCII' '(' term ')'
-    | 'CHARSET' '(' term ')'
-    | 'COALESCE' '(' term ( ',' term )* ')'
-    | 'COLLATION' '(' term ')'
-    | 'DATABASE' '(' ')'
-    | 'IF' '(' term ',' term ',' term ')'
-    | 'FORMAT' '(' term ',' term ( ',' term )? ')'
-    | 'MICROSECOND' '(' term ')'
-    | 'MOD' '(' term ',' term ')'
-    | 'PASSWORD' '(' term ')'
-    | 'QUARTER' '(' term ')'
-    | 'REPEAT' '(' term ',' term ')'
-    | 'REPLACE' '(' term ',' term ',' term ')'
-    | 'REVERSE' '(' term ')'
-    | 'ROW_COUNT' '(' ')'
-    | 'TRUNCATE' '(' term ',' term ')'
-    | 'WEEK' '(' term ( ',' term )? ')'
     | 'WEIGHT_STRING' '(' term ( 'AS' ( 'CHAR' | 'BINARY' ) '(' DECIMAL ')' )? ')'
-    | 'GEOMETRYCOLLECTION' '(' ( term ( ',' term )* )? ')'
-    | 'LINESTRING' '(' term ( ',' term )* ')'
-    | 'MULTILINESTRING' '(' term ( ',' term )* ')'
-    | 'MULTIPOINT' '(' term ( ',' term )* ')'
-    | 'MULTIPOLYGON' '(' term ( ',' term )* ')'
-    | 'POINT' '(' term ',' term ')'
-    | 'POLYGON' '(' term ( ',' term )* ')'
-
     | 'AVG' '(' 'DISTINCT'? 'ALL'? term ')'
     | ( 'BIT_AND' | 'BIT_OR' | 'BIT_XOR' ) '(' 'ALL'? term ')'
     | 'JSON_ARRAYAGG' '(' 'ALL'? term ')'
