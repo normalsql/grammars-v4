@@ -1711,13 +1711,18 @@ userAuthID
     : user ( identified ( 'AND' identified ( 'AND' identified )? )? )? ;
 
 identified
-    : 'IDENTIFIED' 'BY' name
-    | 'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD'
-    | 'IDENTIFIED' 'WITH' name
-    | 'IDENTIFIED' 'WITH' name 'BY' name
-    | 'IDENTIFIED' 'WITH' name 'BY' 'RANDOM' 'PASSWORD'
-    | 'IDENTIFIED' 'WITH' name 'AS' name
+    : 'IDENTIFIED' 'WITH' qname ( 'AS' qname )?
+    | 'IDENTIFIED' ( 'WITH' qname )? ( 'BY' qname | 'RANDOM' 'PASSWORD' )
     ;
+
+//identified
+//    : 'IDENTIFIED' 'BY' name
+//    | 'IDENTIFIED' 'BY' 'RANDOM' 'PASSWORD'
+//    | 'IDENTIFIED' 'WITH' name
+//    | 'IDENTIFIED' 'WITH' name 'BY' name
+//    | 'IDENTIFIED' 'WITH' name 'BY' 'RANDOM' 'PASSWORD'
+//    | 'IDENTIFIED' 'WITH' name 'AS' name
+//    ;
 
 // TODO replace w/ rule identified
 alterAuthOption
