@@ -146,8 +146,8 @@ statements
 comment
     : 'COMMENT' string ;
 
-attribute
-    : 'ATTRIBUTE' string ;
+//attribute
+//    : 'ATTRIBUTE' string ;
 
 database_
     : 'DATABASE' | 'SCHEMA' ;
@@ -164,7 +164,7 @@ statement
     | 'DROP' 'EVENT' exists? qname
 
     | 'CREATE' definer? 'FUNCTION' notExists? qname '(' ( functionParameter ( ',' functionParameter )* )? ')' 'RETURNS' dataType collate? routineCreateOption* storedRoutineBody
-    | 'CREATE' 'AGGREGATE'? 'FUNCTION' notExists? qname 'RETURNS' ( 'STRING' | 'INT' | 'INTEGER' | 'REAL' | 'DECIMAL' ) 'SONAME' string
+    | 'CREATE' 'AGGREGATE'? 'FUNCTION' notExists? qname 'RETURNS' ( 'STRING' | int_ | 'REAL' | dec_ ) 'SONAME' string
     | 'ALTER' 'FUNCTION' qname routineCreateOption*
     | 'DROP' 'FUNCTION' exists? qname
 
@@ -173,7 +173,7 @@ statement
     | 'DROP' 'PROCEDURE' exists? qname
 
     | 'CREATE' ( 'UNIQUE' | 'FULLTEXT' | 'SPATIAL' )? 'INDEX' qname indexType? 'ON' qname
-      '(' keyPart ( ',' keyPart )* ')' (indexOption)* commonIndexOption*
+      '(' keyPart ( ',' keyPart )* ')' indexOption* commonIndexOption*
 
     | 'DROP' onlineOption? 'INDEX' qname 'ON' qname commonIndexOption*
 
@@ -196,18 +196,18 @@ statement
 
     | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname
       ( '(' ( createDef  | tableConstraintDef ) ( ',' ( createDef  | tableConstraintDef ) )* ')' )?
-      ( tableCreateOption ( ','? tableCreateOption )* )? partitionBy? (( 'REPLACE' | 'IGNORE' )? 'AS'? select )?
+      ( tableCreateOption ( ','? tableCreateOption )* )? partitionBy? ( ( 'REPLACE' | 'IGNORE' )? 'AS'? select )?
 
     | 'CREATE' 'TEMPORARY'? 'TABLE' notExists? qname ( 'LIKE' qname | '(' 'LIKE' qname ')' )
     | 'ALTER' onlineOption? 'TABLE' qname ( tableAlterOption ( ','? tableAlterOption )* )?
     | 'RENAME' table_ qname 'TO' qname ( ',' qname 'TO' qname )*
     | 'DROP' 'TEMPORARY'? table_ exists? qname ( ',' qname )* ( 'RESTRICT' | 'CASCADE' )?
 
-    | 'CREATE' 'UNDO'? 'TABLESPACE' qname (tablespaceOption ( ','? tablespaceOption )*)?
+    | 'CREATE' 'UNDO'? 'TABLESPACE' qname ( tablespaceOption ( ','? tablespaceOption )* )?
     | 'ALTER' 'UNDO'? 'TABLESPACE' qname tablespaceOption ( ','? tablespaceOption )*
-    | 'DROP' 'UNDO'? 'TABLESPACE' qname (tablespaceOption ( ','? tablespaceOption )*)?
+    | 'DROP' 'UNDO'? 'TABLESPACE' qname ( tablespaceOption ( ','? tablespaceOption )* )?
 
-    | 'CREATE' definer? 'TRIGGER' notExists? qname ( 'BEFORE' | 'AFTER' ) ( 'INSERT' | 'UPDATE' | 'DELETE' ) 'ON' qname 'FOR' 'EACH' 'ROW' (( 'FOLLOWS' | 'PRECEDES' ) qname )? compoundStatement
+    | 'CREATE' definer? 'TRIGGER' notExists? qname ( 'BEFORE' | 'AFTER' ) ( 'INSERT' | 'UPDATE' | 'DELETE' ) 'ON' qname 'FOR' 'EACH' 'ROW' ( ( 'FOLLOWS' | 'PRECEDES' ) qname )? compoundStatement
     | 'DROP' 'TRIGGER' exists? qname
 
     | 'CREATE' 'USER' notExists? userAuthID ( ',' userAuthID )*
@@ -264,9 +264,9 @@ statement
     | 'SAVEPOINT' qname
     | 'ROLLBACK' 'WORK'? ( 'TO' 'SAVEPOINT'? name | ( 'AND' 'NO'? 'CHAIN' )? ( 'NO'? 'RELEASE' )? )
     | 'RELEASE' 'SAVEPOINT' qname
-    | 'LOCK' ( 'TABLES' | 'TABLE' ) lockItem ( ',' lockItem )*
+    | 'LOCK' table_ lockItem ( ',' lockItem )*
     | 'LOCK' 'INSTANCE' 'FOR' 'BACKUP'
-    | 'UNLOCK' ( 'TABLES' | 'TABLE' | 'INSTANCE')
+    | 'UNLOCK' ( table_ | 'INSTANCE' )
 
     | 'XA' ( 'START' | 'BEGIN' ) xid ( 'JOIN' | 'RESUME' )?
     | 'XA' 'END' xid ( 'SUSPEND' ( 'FOR' 'MIGRATE' )?)?
@@ -305,7 +305,7 @@ statement
     | 'SET' 'NAMES' ( equal term | qname collate? | 'DEFAULT' )
     | 'SET' ( 'GLOBAL' | 'SESSION' )? 'TRANSACTION' transactionCharacteristics ( ',' transactionCharacteristics )*
     | 'SET' 'PASSWORD' ( 'FOR' user )? ( equal string | 'TO' 'RANDOM' ) replaceString? retainCurrentPassword?
-    | 'SET' charset qname
+    | 'SET' charset_ qname
 
     | 'TRUNCATE' 'TABLE'? qname
     | 'IMPORT' 'TABLE' 'FROM' string ( ',' string )*
@@ -314,7 +314,7 @@ statement
     | 'SHOW' 'BINARY' 'LOGS'
     // TODO verify FROM & IN
     | 'SHOW' 'BINLOG' 'EVENTS' ( 'IN' string )? ( 'FROM' DECIMAL )? limit?
-    | 'SHOW' charset like?
+    | 'SHOW' charset_ like?
     | 'SHOW' 'COLLATION' like?
     | 'SHOW' ( 'FULL' | 'EXTENDED' 'FULL'? )? ( 'FIELDS' | 'COLUMNS' ) inDb inDb? like?
     | 'SHOW' 'COUNT' '(' '*' ')' ( 'WARNINGS' | 'ERRORS' )
@@ -336,6 +336,7 @@ statement
     | 'SHOW' 'STORAGE'? 'ENGINES'
     | 'SHOW' 'ERRORS' limit?
     | 'SHOW' 'EVENTS' inDb? like?
+
     | 'SHOW' 'FUNCTION' 'CODE' qname
     | 'SHOW' 'FUNCTION' 'STATUS' like?
     | 'SHOW' 'GRANTS' ( 'FOR' user ( 'USING' user ( ',' user )* )? )?
@@ -380,7 +381,7 @@ statement
 
     | ( 'EXPLAIN' | 'DESCRIBE' | 'DESC' ) qname qname ?
 
-    | ( 'EXPLAIN' | 'DESCRIBE' | 'DESC')
+    | ( 'EXPLAIN' | 'DESCRIBE' | 'DESC ')
       'ANALYZE'?
       ( 'FORMAT' '=' ( 'TRADITIONAL' | 'JSON' | 'TREE' | string ) )?
       ( 'INTO' qname )?
@@ -454,7 +455,7 @@ viewCheckOption
     : 'WITH' ( 'CASCADED' | 'LOCAL' )? 'CHECK' 'OPTION' ;
 
 databaseOption
-    : 'DEFAULT'? charset '='? name
+    : 'DEFAULT'? charset_ '='? name
     | 'DEFAULT'? 'COLLATE' '='? name
     | 'DEFAULT'? 'ENCRYPTION' '='? string
     | 'READ' 'ONLY' '='? decimalDefault
@@ -631,7 +632,7 @@ modifier
     ;
 
 limit
-    : 'LIMIT' literal (( ',' | 'OFFSET' ) literal )? ;
+    : 'LIMIT' literal ( ( ',' | 'OFFSET' ) literal )? ;
 
 limitCount
     : 'LIMIT' DECIMAL ;
@@ -658,7 +659,7 @@ windowDefinition
 
 windowSpec
     : '(' name? ( 'PARTITION' 'BY' orderExpression ( ',' orderExpression )* )? orderBy?
-      (( 'ROWS' | 'RANGE' | 'GROUPS' ) windowFrameExtent
+      ( ( 'ROWS' | 'RANGE' | 'GROUPS' ) windowFrameExtent
       ( 'EXCLUDE' ( 'CURRENT' 'ROW' | 'GROUP' | 'TIES' | 'NO' 'OTHERS' ) )?
       )?
       ')'
@@ -784,7 +785,7 @@ beginWork
     : 'BEGIN' 'WORK'? ;
 
 lockItem
-    : qname tableAlias? ('READ' 'LOCAL'? | 'WRITE' ) ;
+    : qname tableAlias? ( 'READ' 'LOCAL'? | 'WRITE' ) ;
 
 xid
     : string ( ',' string ( ',' ( DECIMAL | string ) )? )? ;
@@ -1192,19 +1193,22 @@ function
 udfExpr
     : term alias? ;
 
+int_
+    : 'INT' | 'INTEGER' ;
+
+dec_
+    : 'DEC' | 'DECIMAL' ;
+
 castType
     : 'BINARY' ( '(' DECIMAL ')' )?
-    | 'CHAR' ( '(' DECIMAL ')' )? ( charset name )? 'BINARY'?
+    | 'CHAR' ( '(' DECIMAL ')' )? ( charset_ name )? 'BINARY'?
     | ( 'NCHAR' | 'NATIONAL' 'CHAR' ) ( '(' DECIMAL ')' )?
-    // TODO can SIGNED be w/o INT?
-    | 'SIGNED' ( 'INT' | 'INTEGER' )?
-    | 'UNSIGNED' ( 'INT' | 'INTEGER' )?
-    | ( 'INT' | 'INTEGER' )
+    | ( 'SIGNED' | 'UNSIGNED' )? int_?
     | 'DATE'
     | 'YEAR'
     | 'TIME' ( '(' DECIMAL ')' )?
     | 'DATETIME' ( '(' DECIMAL ')' )?
-    | ( 'DEC' | 'DECIMAL' ) floatOptions?
+    | dec_ floatOptions?
     | 'JSON'
     | 'REAL'
     | 'DOUBLE' 'PRECISION'?
@@ -1221,14 +1225,14 @@ castType
     ;
 
 dataType
-    : ( 'INT' | 'INTEGER' | 'TINYINT' | 'SMALLINT' | 'MEDIUMINT' | 'BIGINT' ) typeLength? fieldOptions*
+    : ( int_ | 'TINYINT' | 'SMALLINT' | 'MEDIUMINT' | 'BIGINT' ) typeLength? fieldOptions*
     | ( 'REAL' | 'DOUBLE' 'PRECISION'? ) typePrecision? fieldOptions*
-    | ( 'FLOAT' | 'DEC' | 'DECIMAL' | 'NUMERIC' | 'FIXED' ) floatOptions? fieldOptions*
+    | ( 'FLOAT' | dec_ | 'NUMERIC' | 'FIXED' ) floatOptions? fieldOptions*
     | 'BIT' typeLength?
     | 'BOOL'
     | 'BOOLEAN'
-    | ( ( 'CHAR' | 'CHARACTER' ) 'VARYING'?
-      | 'NATIONAL' ( 'CHAR' | 'CHARACTER' ) 'VARYING'?
+    | ( char_ 'VARYING'?
+      | 'NATIONAL' char_ 'VARYING'?
       | 'NATIONAL'? 'VARCHAR'
       | 'NVARCHAR'
       | 'NCHAR' ( 'VARCHAR' | 'VARYING' )?
@@ -1283,10 +1287,13 @@ dataType
     ;
 
 charsetName
-    : charset name ;
+    : charset_ name ;
 
-charset
-    : ( ( 'CHAR' | 'CHARACTER' ) 'SET' | 'CHARSET' ) ;
+charset_
+    : ( char_ 'SET' | 'CHARSET' ) ;
+
+char_
+    : 'CHAR' | 'CHARACTER' ;
 
 timeUnitToo
     : timeUnit
@@ -1477,7 +1484,7 @@ tableCreateOption
     | 'COMPRESSION' '='? string
     | 'CONNECTION' '='? string
     | 'DATA' 'DIRECTORY' '='? string
-    | 'DEFAULT'? charset '='? name
+    | 'DEFAULT'? charset_ '='? name
     | 'DELAY_KEY_WRITE' '='? DECIMAL
     | 'ENCRYPTION' '='? string
     | 'ENGINE' '='? name
@@ -1495,8 +1502,8 @@ tableCreateOption
     | 'START' 'TRANSACTION'
     | 'STATS_AUTO_RECALC' '='? decimalDefault
     | 'STATS_PERSISTENT' '='? decimalDefault
-    | 'STATS_SAMPLE_PAGES' '='? ( FLOAT | DECIMAL | 'DEFAULT')
-    | 'STORAGE' ( 'DISK' | 'MEMORY')
+    | 'STATS_SAMPLE_PAGES' '='? ( FLOAT | DECIMAL | 'DEFAULT ')
+    | 'STORAGE' ( 'DISK' | 'MEMORY ')
     | 'TABLESPACE' '='? name
     | 'TABLE_TYPE' '='? name
     | 'TRANSACTIONAL' '='? DECIMAL
@@ -1559,7 +1566,8 @@ tableAlterOption
     | tableCreateOption
     | partitionBy
     | 'REMOVE' 'PARTITIONING'
-    | 'DISCARD' 'TABLESPACE' | 'IMPORT' 'TABLESPACE'
+    | 'DISCARD' 'TABLESPACE'
+    | 'IMPORT' 'TABLESPACE'
     | 'ADD' 'PARTITION' ( noLogging? ( '(' partitionDef ( ',' partitionDef )* ')' | 'PARTITIONS' DECIMAL ) )?
     | 'DROP' 'PARTITION' name ( ',' name )*
     | 'REBUILD' 'PARTITION' noLogging? allOrPartitionNameList
