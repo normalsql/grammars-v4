@@ -4,7 +4,7 @@ grammar MySQL;
   Copyright 2025 Jason Osgood
 
   Refactored MySQL grammar to adopt NormalSQL's rules, idioms, and style.
-  Goal is for misc dialects to all emit the same parse tree (given the
+  Goal is for misc SQL dialects to all emit the same parse tree (given the
   same input). A work in progress, as grammars converge over time, trial &
   error, balancing tradeoffs (lex vs parse vs semantic validation).
 
@@ -98,11 +98,9 @@ grammar MySQL;
 /**
 
    I have no idea how to accomodate MySQL extensions.
+
    Note: update rule 'keyword' whenever a new
    keyword (token) is added (or removed).
-
-   Have matched order of alts from sql_yacc.yy, as needed, because I'm getting
-   cross-eyed doing side-by-side comparisons.
 
    I think it'd be cool to topo sort the parser's rules.
 
@@ -178,8 +176,8 @@ with
 cte
     : tableColumns 'AS' '(' select ')' ;
 
-tableColumns
-    : qname ( '(' name ( ',' name )* ')' )? ;
+    tableColumns
+        : qname ( '(' name ( ',' name )* ')' )? ;
 
 select
     : with? selectCore ( ( 'UNION' | 'EXCEPT' | 'INTERSECT' ) ( 'DISTINCT' | 'ALL' )? selectCore )*
@@ -187,42 +185,24 @@ select
     ;
 
 insert
-    : 'INSERT' ( 'LOW_PRIORITY' | 'DELAYED' | 'HIGH_PRIORITY' )?
-      'IGNORE'?
-      'INTO'? qname partition?
-      // TODO fix this mess
-
-      ( insertFromConstructor valuesReference?
-      | 'SET' setter ( ',' setter )* valuesReference?
-      | insertQueryExpression
-      )
-      ( 'ON' 'DUPLICATE' 'KEY' 'UPDATE' setter ( ',' setter )* )?
+    : 'INSERT' ( 'LOW_PRIORITY' | 'DELAYED' | 'HIGH_PRIORITY' )? 'IGNORE'? insertInto
+      ( 'AS' tableColumns )?
+      ( 'ON' 'DUPLICATE' 'KEY' 'UPDATE' assign ( ',' assign )* )?
     ;
 
-valuesReference
-    : 'AS' tableColumns ;
-
-
-replace
-    : 'REPLACE' ( 'LOW_PRIORITY' | 'DELAYED' )?
-      'INTO'? qname partition?
-      ( insertFromConstructor | 'SET' setter ( ',' setter )* | insertQueryExpression )?
-    ;
-
-    insertFromConstructor
-        : ( '(' ( qname ( ',' qname )* )? ')' )? ( 'VALUES' | 'VALUE' ) term  ( ',' term )* ;
-
-    insertQueryExpression
-        : with? selectCore orderBy? limit?
-        | '(' select ')'
-        | ( '(' ( qname ( ',' qname )* )? ')' )? select
+    insertInto
+        : 'INTO'? qname partition?
+          ( ( '(' ( qname ( ',' qname )* )? ')' )? select
+          | 'SET' assign ( ',' assign )*
+          )
         ;
 
-
+replace
+    : 'REPLACE' ( 'LOW_PRIORITY' | 'DELAYED' )? insertInto ;
 
 update
-    : with? 'UPDATE' 'LOW_PRIORITY'? 'IGNORE'? tableReferenceList
-      'SET' setter ( ',' setter )*
+    : with? 'UPDATE' 'LOW_PRIORITY'? 'IGNORE'? tables ( ',' tables )*
+      'SET' assign ( ',' assign )*
       where?
       orderBy? limitCount?
     ;
@@ -230,8 +210,8 @@ update
 delete
     : with? 'DELETE' 'LOW_PRIORITY'? 'QUICK'? 'IGNORE'?
       ( 'FROM' qname alias? ( 'PARTITION' '(' name ( ',' name )* ')' )? where? orderBy? limitCount?
-      | qname ( ',' qname )* 'FROM' tableReferenceList where?
-      | 'FROM' qname ( ',' qname )* 'USING' tableReferenceList where?
+      | qname ( ',' qname )* 'FROM' tables ( ',' tables )* where?
+      | 'FROM' qname ( ',' qname )* 'USING' tables ( ',' tables )* where?
       )
     ;
 
@@ -243,7 +223,7 @@ load
       // TODO DRY?
       ( 'REPLACE' | 'IGNORE' )?
       'INTO' 'TABLE' qname partition?
-      charsetName?
+      charsetName_?
 
       ( 'ROWS' 'IDENTIFIED' 'BY' string )?
 
@@ -253,11 +233,11 @@ load
       ( 'IGNORE' DECIMAL ( 'LINES' | 'ROWS' ) )?
 
       ( '(' ( qname ( ',' qname )* )? ')' )?
-      ( 'SET' setter ( ',' setter )* )?
+      ( 'SET' assign ( ',' assign )* )?
     ;
 
 set
-    : 'SET' setter ( ',' setter )*
+    : 'SET' assign ( ',' assign )*
     | 'SET' 'NAMES' ( equal_ term | qname collate? | 'DEFAULT' )
     | 'SET' ( 'GLOBAL' | 'SESSION' )? 'TRANSACTION' transactionCharacteristics ( ',' transactionCharacteristics )*
     | 'SET' 'PASSWORD' ( 'FOR' user )? ( equal_ string | 'TO' 'RANDOM' ) replaceString? retainCurrentPassword?
@@ -308,7 +288,7 @@ selectCore
 
     into
         : 'INTO'
-          ( 'OUTFILE' string charsetName? fieldHandling? lineHandling?
+          ( 'OUTFILE' string charsetName_? fieldHandling? lineHandling?
           | 'DUMPFILE' string
           | qname ( ',' qname )*
           )
@@ -322,8 +302,11 @@ selectCore
         | qname partition? alias? indexHint* ( 'TABLESAMPLE' ( 'SYSTEM' | 'BERNOULLI' ) '(' literal ')' )?
         | 'LATERAL'? '(' select ')' ( 'AS'? tableColumns )?
         | values alias?
+
+        // TODO maybe refactor these 2 into rule tableFunctions
         | 'JSON_TABLE' '(' term ',' string 'COLUMNS' '(' jsonColumn ( ',' jsonColumn )* ')' ')' alias?
         | qname '(' term ( ',' term )* ')' alias?
+
         | '{' 'OJ' tables '}'
         | '(' tables ')'
         ;
@@ -491,7 +474,7 @@ other_ddl
     | 'REPAIR' noLogging? table_ qname ( ',' qname )* repairType*
     | 'UNINSTALL' ( 'PLUGIN' name | 'COMPONENT' string ( ',' string )* )
     | 'INSTALL' 'PLUGIN' name 'SONAME' string
-    | 'INSTALL' 'COMPONENT' string ( ',' string )* ( 'SET' setter ( ',' setter )* )?
+    | 'INSTALL' 'COMPONENT' string ( ',' string )* ( 'SET' assign ( ',' assign )* )?
     | 'TRUNCATE' 'TABLE'? qname
     | 'IMPORT' 'TABLE' 'FROM' string ( ',' string )*
     | show_ddl
@@ -551,13 +534,13 @@ spatial_ddl
     ;
 
 user_ddl
-    : 'CREATE' 'USER' notExists? userAuthID ( ',' userAuthID )* ( 'DEFAULT' 'ROLE' roleList )? require? resourceWith? passwordOption* ( comment | 'ATTRIBUTE' string )*
+    : 'CREATE' 'USER' notExists? userAuthID ( ',' userAuthID )* defaultRole? require? resourceWith? passwordOption* ( comment | 'ATTRIBUTE' string )*
 
     | 'ALTER' 'USER' exists? user alterAuthOption? ( ',' user alterAuthOption? )* require? resourceWith? passwordOption* ( comment | 'ATTRIBUTE' string )*
 
     | 'ALTER' 'USER' exists? 'USER' '(' ')' alterAuthOption
     | 'ALTER' 'USER' exists? ( 'USER' '(' ')' | user ) ( DECIMAL 'FACTOR' )?
-    | 'ALTER' 'USER' exists? user 'DEFAULT' 'ROLE' ( 'ALL' | 'NONE' | roleList )
+    | 'ALTER' 'USER' exists? user defaultRole
     | 'DROP' 'USER' exists? user ( ',' user )*
     | 'RENAME' 'USER' user 'TO' user ( ',' user 'TO' user )*
     ;
@@ -726,7 +709,7 @@ table_ddl
         | 'RENAME' 'COLUMN' name 'TO' name
         | 'RENAME' ( 'TO' | 'AS' )? qname
         | 'RENAME' index_ qname 'TO' name
-        | 'CONVERT' 'TO' charsetName collate?
+        | 'CONVERT' 'TO' charsetName_ collate?
         | 'FORCE'
         | orderBy
         | tableCreateOption
@@ -780,8 +763,8 @@ server_ddl
 
 
 rule_ddl
-    : 'CREATE' 'ROLE' notExists? roleList
-    | 'DROP' 'ROLE' exists? roleList
+    : 'CREATE' 'ROLE' notExists? user ( ',' user )*
+    | 'DROP' 'ROLE' exists? user ( ',' user )*
     ;
 
 resourceGroup_ddl
@@ -799,19 +782,19 @@ resourceGroup_ddl
 
 logfileGroup_ddl
     : 'CREATE' 'LOGFILE' 'GROUP' qname 'ADD' 'UNDOFILE' string ( logfileAlterOption ( ','? logfileAlterOption )* )?
-    | 'ALTER' 'LOGFILE' 'GROUP' qname 'ADD' 'UNDOFILE' string ( logfileCreateOptions ( ','? logfileCreateOptions )* )?
+    | 'ALTER' 'LOGFILE' 'GROUP' qname 'ADD' 'UNDOFILE' string ( logfileCreateOption ( ','? logfileCreateOption )* )?
     | 'DROP' 'LOGFILE' 'GROUP' qname ( logfileDropOption ( ','? logfileDropOption )* )?
     ;
 
     logfileAlterOption
-        : logfileCreateOptions
+        : logfileCreateOption
         | 'UNDO_BUFFER_SIZE' '='? byteSize
         | 'REDO_BUFFER_SIZE' '='? byteSize
         | 'NODEGROUP' '='? DECIMAL
         | 'COMMENT' '='? string
         ;
 
-    logfileCreateOptions
+    logfileCreateOption
         : 'INITIAL_SIZE' '='? byteSize
         | logfileDropOption
         ;
@@ -962,16 +945,10 @@ windowFrameBound
     ;
 
 orderExpression
-    : term direction? ;
-
-direction
-    : 'ASC' | 'DESC' ;
-
-tableReferenceList
-    : tables ( ',' tables )* ;
+    : term direction_? ;
 
 values
-    : 'VALUES' term ( ',' term )* ;
+    : ( 'VALUE' | 'VALUES' ) term ( ',' term )* ;
 
 alias
     : 'AS'? name ;
@@ -1131,26 +1108,11 @@ passwordOption
 
 grant
     : 'GRANT' ( roleOrPrivilegesList | 'ALL' 'PRIVILEGES'? ) 'ON' aclType? grantIdentifier
-      'TO' grantTargetList ( 'WITH' 'GRANT' 'OPTION' )?
+      'TO' user ( ',' user )* ( 'WITH' 'GRANT' 'OPTION' )?
       // require? grantOptions?
       ( 'AS' user withRoles? )?
-    | 'GRANT' 'PROXY' 'ON' user 'TO' grantTargetList
+    | 'GRANT' 'PROXY' 'ON' user 'TO' user ( ',' user )*
     | 'GRANT' roleOrPrivilegesList 'TO' user ( ',' user )* ( 'WITH' 'ADMIN' 'OPTION' )?
-    ;
-
-grantTargetList
-    :  user ( ',' user )* ;
-
-exceptRoleList
-    : 'EXCEPT' roleList ;
-
-withRoles
-    : 'WITH' 'ROLE'
-      ( roleList
-      | 'ALL' exceptRoleList?
-      | 'NONE'
-      | 'DEFAULT'
-      )
     ;
 
 revoke
@@ -1167,42 +1129,52 @@ revoke
       ( 'IGNORE' 'UNKNOWN' 'USER' )?
     ;
 
+    roleOrPrivilegesList
+        : roleOrPrivilege ( ',' roleOrPrivilege )* ;
+
+    roleOrPrivilege
+        : tableColumns
+        | user
+        | ( 'SELECT' | 'INSERT' | 'UPDATE' | 'REFERENCES' ) ( '(' name ( ',' name )* ')' )?
+        | 'DELETE' | 'USAGE' | 'INDEX' | 'DROP' | 'EXECUTE' | 'RELOAD' | 'SHUTDOWN' | 'PROCESS' | 'FILE' | 'PROXY' | 'SUPER' | 'EVENT' | 'TRIGGER'
+        | 'GRANT' 'OPTION'
+        | 'SHOW' 'DATABASES'
+        | 'CREATE' ( 'TEMPORARY' 'TABLES' | 'ROUTINE' | 'TABLESPACE' | 'USER' | 'VIEW' )?
+        | 'LOCK' 'TABLES'
+        | 'REPLICATION' ( 'CLIENT' | 'REPLICA' )
+        | 'SHOW' 'VIEW'
+        | 'ALTER' 'ROUTINE'?
+        | ( 'CREATE' | 'DROP' ) 'ROLE'
+        ;
+
+    grantIdentifier
+        : ( '*' | name ) ( '.' ( '*' | name ) )? ;
+
+
+withRoles
+    : 'WITH' 'ROLE'
+      ( user ( ',' user )*
+      | 'ALL' ( 'EXCEPT' user ( ',' user )* )?
+      | 'NONE'
+      | 'DEFAULT'
+      )
+    ;
+
 aclType
     : 'TABLE'
     | 'FUNCTION'
     | 'PROCEDURE'
     ;
 
-roleOrPrivilegesList
-    : roleOrPrivilege ( ',' roleOrPrivilege )* ;
-
-roleOrPrivilege
-    : tableColumns
-    | user
-    | ( 'SELECT' | 'INSERT' | 'UPDATE' | 'REFERENCES' ) ( '(' name ( ',' name )* ')' )?
-    | 'DELETE' | 'USAGE' | 'INDEX' | 'DROP' | 'EXECUTE' | 'RELOAD' | 'SHUTDOWN' | 'PROCESS' | 'FILE' | 'PROXY' | 'SUPER' | 'EVENT' | 'TRIGGER'
-    | 'GRANT' 'OPTION'
-    | 'SHOW' 'DATABASES'
-    | 'CREATE' ( 'TEMPORARY' 'TABLES' | 'ROUTINE' | 'TABLESPACE' | 'USER' | 'VIEW' )?
-    | 'LOCK' 'TABLES'
-    | 'REPLICATION' ( 'CLIENT' | 'REPLICA' )
-    | 'SHOW' 'VIEW'
-    | 'ALTER' 'ROUTINE'?
-    | ( 'CREATE' | 'DROP' ) 'ROLE'
-    ;
-
-grantIdentifier
-    : ( '*' | name ) ( '.' ( '*' | name ) )? ;
-
 setRole
-    : 'SET' 'ROLE' roleList
+    : 'SET' 'ROLE' user ( ',' user )*
     | 'SET' 'ROLE' ( 'NONE' | 'DEFAULT' )
-    | 'SET' 'ROLE' 'ALL' ( 'EXCEPT' roleList )?
-    | 'SET' 'DEFAULT' 'ROLE' ( roleList | 'NONE' | 'ALL' ) 'TO' roleList
+    | 'SET' 'ROLE' 'ALL' ( 'EXCEPT' user ( ',' user )* )?
+    | 'SET' defaultRole 'TO' user ( ',' user )*
     ;
 
-roleList
-    : user ( ',' user )* ;
+defaultRole
+    : 'DEFAULT' 'ROLE' ( 'ALL' | 'NONE' | user ( ',' user )* ) ;
 
 histogram
     : 'UPDATE' 'HISTOGRAM' 'ON' name
@@ -1214,7 +1186,11 @@ histogram
 
 checkOption
     : 'FOR' 'UPGRADE'
-    | 'QUICK' | 'FAST' | 'MEDIUM' | 'EXTENDED' | 'CHANGED'
+    | 'QUICK'
+    | 'FAST'
+    | 'MEDIUM'
+    | 'EXTENDED'
+    | 'CHANGED'
     ;
 
 repairType
@@ -1379,12 +1355,9 @@ dataType
 
     characterType
         : 'BYTE'
-        | 'BINARY' ( 'ASCII' | charsetName | 'UNICODE' )?
-        | 'BINARY'? ( 'ASCII' | charsetName | 'UNICODE' )
+        | 'BINARY' ( 'ASCII' | charsetName_ | 'UNICODE' )?
+        | 'BINARY'? ( 'ASCII' | charsetName_ | 'UNICODE' )
         ;
-
-charsetName
-    : charset_ name ;
 
 timeUnitToo
     : timeUnit
@@ -1525,7 +1498,7 @@ now
     : ( 'NOW' | 'CURRENT_TIMESTAMP' | 'LOCALTIME' | 'LOCALTIMESTAMP' ) ( '(' DECIMAL? ')' )? ;
 
 keyPart
-    : ( name typeLength? | '(' term ')' ) direction? ;
+    : ( name typeLength? | '(' term ')' ) direction_? ;
 
 decimalDefault
     : DECIMAL | 'DEFAULT' ;
@@ -1583,7 +1556,7 @@ param
 collate
     : 'COLLATE' name ;
 
-setter
+assign
     : scope? qname equal_? term ;
 
 scope
@@ -1613,6 +1586,7 @@ identified
 retainCurrentPassword
     : 'RETAIN' 'CURRENT' 'PASSWORD' ;
 
+// TODO restore this stuff
 userRegistration
     : factor 'INITIATE' 'REGISTRATION'
     | factor 'UNREGISTER'
@@ -1697,11 +1671,17 @@ char_
 charset_
     : char_ 'SET' | 'CHARSET' ;
 
+charsetName_
+    : charset_ name ;
+
 database_
     : 'DATABASE' | 'SCHEMA' ;
 
 dec_
     : 'DEC' | 'DECIMAL' ;
+
+direction_
+    : 'ASC' | 'DESC' ;
 
 enable_
     : 'ENABLE' | 'DISABLE' ;
