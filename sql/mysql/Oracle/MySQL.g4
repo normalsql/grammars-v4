@@ -1154,7 +1154,7 @@ show_etc
     | 'SHOW' 'EXTENDED'? ( 'KEYS' | 'INDEX' | 'INDEXES' ) inDb inDb? where?
     | 'SHOW' 'LIBRARY' 'STATUS' like?
     | 'SHOW' 'OPEN' 'TABLES' inDb? like?
-    | 'SHOW' 'PARSE_TREE' ( dml | ddl )
+    | 'SHOW' 'PARSE_TREE' ( dml | ddl | etc )
     | 'SHOW' 'PLUGINS'
     | 'SHOW' 'PRIVILEGES'
     | 'SHOW' 'FULL'? 'PROCESSLIST'
@@ -1439,8 +1439,7 @@ forChannel
 compound
     : dml
     | ddl
-    | block
-    | name ':' block name?
+    | etc
     | 'IF' if 'END' 'IF'
     | 'CASE' term? ( 'WHEN' term then )+ ( 'ELSE' ( compound ';' )+ )? 'END' 'CASE'
     | 'ITERATE' name
@@ -1449,6 +1448,8 @@ compound
     | 'FETCH' ( 'NEXT'? 'FROM' )? name 'INTO' name ( ',' name )*
     | 'LEAVE' name
     | 'RETURN' term
+    | block
+    | name ':' block name?
     ;
 
     block
