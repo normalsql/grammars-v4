@@ -218,8 +218,8 @@ select
 
         item
             : '*'
+            | qname
             | term alias?
-            | qname ( '.'  '*' )?
             ;
 
         into
