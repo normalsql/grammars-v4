@@ -265,7 +265,7 @@ select
             : 'WHERE' term ;
 
         groupBy
-            : 'GROUP' 'BY' orderExpression ( ',' orderExpression )* ( 'WITH' 'ROLLUP' )?
+            : 'GROUP' 'BY' orderTerm ( ',' orderTerm )* ( 'WITH' 'ROLLUP' )?
             | 'GROUP' 'BY' ( 'ROLLUP' | 'CUBE' ) terms
             ;
 
@@ -276,15 +276,15 @@ select
             : name 'AS' windowSpec ;
 
             windowSpec
-                : '(' name? ( 'PARTITION' 'BY' orderExpression ( ',' orderExpression )* )? orderBy?
-                  ( ( 'ROWS' | 'RANGE' | 'GROUPS' ) ( windowFrameStart | windowFrameBetween )
+                : '(' name? ( 'PARTITION' 'BY' orderTerm ( ',' orderTerm )* )? orderBy?
+                  ( ( 'ROWS' | 'RANGE' | 'GROUPS' ) ( windowFrameStart | 'BETWEEN' windowFrameBound 'AND' windowFrameBound )
                   ( 'EXCLUDE' ( 'CURRENT' 'ROW' | 'GROUP' | 'TIES' | 'NO' 'OTHERS' ) )?
                   )?
                   ')'
                 ;
 
                 windowFrameStart
-                    : value 'PRECEDING'
+                    : term 'PRECEDING'
                 //    : 'UNBOUNDED' 'PRECEDING'
                 //    | INTEGER 'PRECEDING'
                 //    | PARAM 'PRECEDING'
@@ -292,12 +292,9 @@ select
                     | 'CURRENT' 'ROW'
                     ;
 
-                windowFrameBetween
-                    : 'BETWEEN' windowFrameBound 'AND' windowFrameBound ;
-
                 windowFrameBound
                     : windowFrameStart
-                    | value 'FOLLOWING'
+                    | term 'FOLLOWING'
                 //    | 'UNBOUNDED' 'FOLLOWING'
                 //    | INTEGER 'FOLLOWING'
                 //    | PARAM 'FOLLOWING'
@@ -513,9 +510,9 @@ term
         ;
 
 orderBy
-    : 'ORDER' 'BY' orderExpression ( ',' orderExpression )* ;
+    : 'ORDER' 'BY' orderTerm ( ',' orderTerm )* ;
 
-    orderExpression
+    orderTerm
         : term direction_? ;
 
 
