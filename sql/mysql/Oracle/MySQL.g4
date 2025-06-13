@@ -173,8 +173,8 @@ dml
     : select
     | delete
     | insert
-    | update
     | replace
+    | update
     | load
     | set
     | transaction
@@ -305,7 +305,10 @@ select
             : 'QUALIFY' term ;
 
         values
-            : ( 'VALUE' | 'VALUES' ) term ( ',' term )* ;
+            : 'VALUES' row ( ',' row )* ;
+
+            row
+                : 'ROW'? '(' ( term ( ',' term )* )? ')' ;
 
         limit
             : 'LIMIT' literal ( ( ',' | 'OFFSET' ) literal )? ;
@@ -323,10 +326,15 @@ insert
 
     insertCore
         : 'INTO'? qname partition?
-          ( ( '(' ( qname ( ',' qname )* )? ')' )? select
+          ( columns? ( 'VALUES' | 'VALUE' )
+          '(' ( term  ( ',' term )* )? ')' ( ',' '(' ( term  ( ',' term )* )? ')' )*
           | setVariables
+          | columns? select
           )
         ;
+        
+        columns
+            : '(' ( qname ( ',' qname )* )? ')' ;
 
 replace
     : 'REPLACE' ( 'LOW_PRIORITY' | 'DELAYED' )? insertCore ;
@@ -364,7 +372,7 @@ load
 
       ( 'IGNORE' DECIMAL ( 'LINES' | 'ROWS' ) )?
 
-      ( '(' ( qname ( ',' qname )* )? ')' )?
+      columns?
       setVariables?
     ;
 
@@ -749,7 +757,7 @@ table_ddl
         | 'TABLESPACE' '='? name
         | 'TABLE_TYPE' '='? name
         | 'TRANSACTIONAL' '='? DECIMAL
-        | 'UNION' '='? '(' ( qname ( ',' qname )* )? ')'
+        | 'UNION' '='? columns
         ;
 
     tableAlterOption
@@ -975,7 +983,7 @@ etc
     | 'RESTART'
     | 'GET' ( 'CURRENT' | 'STACKED' )? 'DIAGNOSTICS'
        ( statementInformationItem ( ',' statementInformationItem )*
-       | 'CONDITION' value conditionInformationItem ( ',' conditionInformationItem )*
+       | 'CONDITION' literal conditionInformationItem ( ',' conditionInformationItem )*
        )
     | 'BEGIN' 'WORK'?
     | 'ALTER' 'INSTANCE'
@@ -1100,8 +1108,8 @@ replicationFilter
     filterDef
         : 'REPLICATE_DO_DB' '=' '(' ( name ( ',' name )* )? ')'
         | 'REPLICATE_IGNORE_DB' '=' '(' ( name ( ',' name )* )? ')'
-        | 'REPLICATE_DO_TABLE' '=' '(' ( qname ( ',' qname )* )? ')'
-        | 'REPLICATE_IGNORE_TABLE' '=' '(' ( qname ( ',' qname )* )? ')'
+        | 'REPLICATE_DO_TABLE' '=' columns
+        | 'REPLICATE_IGNORE_TABLE' '=' columns
         | 'REPLICATE_WILD_DO_TABLE' '=' '(' ( string ( ',' string )* )? ')'
         | 'REPLICATE_WILD_IGNORE_TABLE' '=' '(' ( string ( ',' string )* )? ')'
         | 'REPLICATE_REWRITE_DB' '=' '(' ( schemaIdentifierPair ( ',' schemaIdentifierPair )* )? ')'
