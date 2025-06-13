@@ -235,7 +235,7 @@ select
             | tables ( ( 'INNER' | 'CROSS' )? 'JOIN' | 'STRAIGHT_JOIN' ) tables ( 'ON' term | 'USING' '(' name ( ',' name )* ')' )?
             | tables ( 'LEFT' | 'RIGHT' ) 'OUTER'? 'JOIN' tables ( 'ON' term | 'USING' '(' name ( ',' name )* ')' )
             | tables ( 'NATURAL' 'INNER'? 'JOIN' | 'NATURAL' ( 'LEFT' | 'RIGHT' ) 'OUTER'? 'JOIN' ) tables
-            | qname partition? alias? indexHint* ( 'TABLESAMPLE' ( 'SYSTEM' | 'BERNOULLI' ) '(' value ')' )?
+            | qname partition? alias? indexHint* ( 'TABLESAMPLE' ( 'SYSTEM' | 'BERNOULLI' ) '(' literal ')' )?
             | 'LATERAL'? '(' select ')' ( 'AS'? tableColumns )?
             | values alias?
 
@@ -308,7 +308,7 @@ select
             : ( 'VALUE' | 'VALUES' ) term ( ',' term )* ;
 
         limit
-            : 'LIMIT' value ( ( ',' | 'OFFSET' ) value )? ;
+            : 'LIMIT' literal ( ( ',' | 'OFFSET' ) literal )? ;
 
         locking
             : 'FOR' ( 'UPDATE' | 'SHARE' ) ( 'OF' qname ( ',' qname )* )? ( 'SKIP' 'LOCKED' | 'NOWAIT' )?
@@ -418,7 +418,7 @@ terms
 
 term
     : 'ROW'? '(' ( term ( ',' term )* )? ')'
-    | value
+    | literal
     | term ( '->' | '->>' ) string
     | term 'AT' 'LOCAL'
     | 'BINARY' term
@@ -685,7 +685,7 @@ table_ddl
     columnAttribute
         : 'NOT'? null_
         | 'NOT' 'SECONDARY'
-        | 'DEFAULT' ( now | value | '(' term ')' )
+        | 'DEFAULT' ( now | literal | '(' term ')' )
         | 'ON' 'UPDATE' now
         | 'AUTO_INCREMENT'
         | 'SERIAL' 'DEFAULT' 'VALUE'
@@ -765,7 +765,7 @@ table_ddl
 
         | 'DROP' ( 'COLUMN'? name ( 'RESTRICT' | 'CASCADE' )? | 'FOREIGN' 'KEY' name | 'PRIMARY' 'KEY' | index_ qname | 'CHECK' name | 'CONSTRAINT' name )
         | enable_ 'KEYS'
-        | 'ALTER' 'COLUMN'? name ( 'SET' 'DEFAULT' ( '(' term ')' | value ) | 'DROP' 'DEFAULT' | 'SET' visibility_ )
+        | 'ALTER' 'COLUMN'? name ( 'SET' 'DEFAULT' ( '(' term ')' | literal ) | 'DROP' 'DEFAULT' | 'SET' visibility_ )
         | 'ALTER' 'INDEX' qname visibility_
         | 'ALTER' 'CHECK' name enforced_
         | 'ALTER' 'CONSTRAINT' name enforced_
@@ -1072,7 +1072,7 @@ replicationSource
         | 'SOURCE_SSL_CRLPATH' '=' string
         | 'SOURCE_PUBLIC_KEY_PATH' '=' string
         | 'GET_SOURCE_PUBLIC_KEY' '=' DECIMAL
-        | 'SOURCE_HEARTBEAT_PERIOD' '=' value
+        | 'SOURCE_HEARTBEAT_PERIOD' '=' literal
         | 'IGNORE_SERVER_IDS' '=' '(' ( DECIMAL ( ',' DECIMAL )* )? ')'
         | 'SOURCE_COMPRESSION_ALGORITHM' '=' string
         | 'SOURCE_ZSTD_COMPRESSION_LEVEL' '=' DECIMAL
@@ -1626,7 +1626,7 @@ name
     | CHARSET
     ;
 
-value
+literal
     : ID
     | keyword
     | string
