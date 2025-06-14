@@ -253,7 +253,7 @@ select
 
             jsonColumn
                 : name 'FOR' 'ORDINALITY'
-                | name dataType collate? 'EXISTS'? 'PATH' string ( jsonResponse jsonResponse? )?
+                | name type collate? 'EXISTS'? 'PATH' string ( jsonResponse jsonResponse? )?
                 | 'NESTED' 'PATH' string 'COLUMNS' '(' jsonColumn ( ',' jsonColumn )* ')'
                 ;
 
@@ -266,7 +266,7 @@ select
 
         groupBy
             : 'GROUP' 'BY' orderTerm ( ',' orderTerm )* ( 'WITH' 'ROLLUP' )?
-            | 'GROUP' 'BY' ( 'ROLLUP' | 'CUBE' ) terms
+            | 'GROUP' 'BY' ( 'ROLLUP' | 'CUBE' ) '(' term  ( ',' term )* ')'
             ;
 
         having
@@ -421,19 +421,15 @@ transaction
     xid
         : string ( ',' string ( ',' ( DECIMAL | string ) )? )? ;
 
-terms
-    : '(' term  ( ',' term )* ')' ;
-
 term
     : 'ROW'? '(' ( term ( ',' term )* )? ')'
     | literal
     | term ( '->' | '->>' ) string
     | term 'AT' 'LOCAL'
     | 'BINARY' term
-    | 'CAST' '(' term 'AS' castType 'ARRAY'? ')'
+    | 'CAST' '(' term 'AS' type 'ARRAY'? ')'
     | 'CAST' '(' term 'AT' 'TIME' 'ZONE' 'INTERVAL'? string 'AS' 'DATETIME' ( '(' DECIMAL ')' )? ')'
-    | 'CONVERT' '(' term ',' castType ')'
-    | 'CONVERT' '(' term ',' dataType ')'
+    | 'CONVERT' '(' term ',' type ')'
     | 'CONVERT' '(' term 'USING' name ')'
 
     | term 'COLLATE' name
@@ -448,14 +444,14 @@ term
     | term ( '=' | ':=' | '!=' | '<>' | '<=>' | '>=' | '>' | '<=' | '<' ) term
 
     | function ( ( 'RESPECT' | 'IGNORE' ) 'NULLS' )? ( 'OVER' ( name | windowSpec ) )?
-    | 'GROUPING' terms
+    | 'GROUPING' '(' term  ( ',' term )* ')'
     | '{' name term '}'
     | 'MATCH' ( qname ( ',' qname )* | '(' qname ( ',' qname )* ')' ) 'AGAINST' '(' term fulltextOptions? ')'
     | 'DEFAULT' '(' qname ')'
     | term 'IS' 'NOT'? ( 'TRUE' | 'FALSE' | 'UNKNOWN' | null_ )
     | term 'NOT'? 'LIKE' term ( 'ESCAPE' term )?
     | term 'NOT'? ( 'REGEXP' | 'RLIKE' ) term
-    | term 'NOT'? 'IN' ( '(' select ')' | terms )
+    | term 'NOT'? 'IN' ( '(' select ')' | '(' term  ( ',' term )* ')' )
     | term 'MEMBER' 'OF'? '(' term ')'
     | term 'NOT'? 'BETWEEN' term 'AND' term
     | 'CASE' term? ( 'WHEN' term 'THEN' term )+ ( 'ELSE' term )? 'END'
@@ -477,7 +473,7 @@ term
 
         | 'CHAR' '(' term ( ',' term )* ( 'USING' name )? ')'
         | 'CURRENT_USER' ( '(' ')' )?
-        | 'JSON_VALUE' '(' term ',' string ( 'RETURNING' castType )? ( jsonResponse jsonResponse? )? ')'
+        | 'JSON_VALUE' '(' term ',' string ( 'RETURNING' type )? ( jsonResponse jsonResponse? )? ')'
         | 'TRIM' '(' ( term ( 'FROM' term )? | 'LEADING' term? 'FROM' term | 'TRAILING' term? 'FROM' term | 'BOTH' term? 'FROM' term ) ')'
 
         | 'CURDATE' ( '(' ')' )?
@@ -523,10 +519,8 @@ orderBy
     orderTerm
         : term direction_? ;
 
-
 comment
     : 'COMMENT' string ;
-
 
 ddl
     : database_ddl
@@ -570,7 +564,7 @@ event_ddl
         ;
 
 function_ddl
-    : 'CREATE' definer? function_ notExists? qname '(' ( param ( ',' param )* )? ')' ( 'RETURNS' dataType collate? )? functionOption* ( compound | 'AS' string )
+    : 'CREATE' definer? function_ notExists? qname '(' ( param ( ',' param )* )? ')' ( 'RETURNS' type collate? )? functionOption* ( compound | 'AS' string )
     | 'ALTER' function_ qname functionOption*
     | 'DROP' function_ exists? qname
     | 'CREATE' 'AGGREGATE'? 'FUNCTION' notExists? qname 'RETURNS' ( 'STRING' | int_ | 'REAL' | dec_ ) 'SONAME' string
@@ -686,7 +680,7 @@ table_ddl
     ;
 
     createDef
-        : qname dataType columnAttribute* ;
+        : qname type columnAttribute* ;
 
     // TODO refactor this and table constraint defs to better match docs
     // https://dev.mysql.com/doc/refman/9.3/en/create-table.html
@@ -1106,12 +1100,12 @@ replicationFilter
 
     // TODO use qname (vs name, string) for all?
     filterDef
-        : 'REPLICATE_DO_DB' '=' '(' ( name ( ',' name )* )? ')'
-        | 'REPLICATE_IGNORE_DB' '=' '(' ( name ( ',' name )* )? ')'
+        : 'REPLICATE_DO_DB' '=' columns
+        | 'REPLICATE_IGNORE_DB' '=' columns
         | 'REPLICATE_DO_TABLE' '=' columns
         | 'REPLICATE_IGNORE_TABLE' '=' columns
-        | 'REPLICATE_WILD_DO_TABLE' '=' '(' ( string ( ',' string )* )? ')'
-        | 'REPLICATE_WILD_IGNORE_TABLE' '=' '(' ( string ( ',' string )* )? ')'
+        | 'REPLICATE_WILD_DO_TABLE' '=' columns
+        | 'REPLICATE_WILD_IGNORE_TABLE' '=' columns
         | 'REPLICATE_REWRITE_DB' '=' '(' ( schemaIdentifierPair ( ',' schemaIdentifierPair )* )? ')'
         ;
 
@@ -1212,7 +1206,7 @@ handlerReadOrScan
     : ( 'FIRST' | 'NEXT' )
     | name
       ( ( 'FIRST' | 'NEXT' | 'PREV' | 'LAST' )
-      | ( '=' | '<' | '>' | '<=' | '>=' ) terms
+      | ( '=' | '<' | '>' | '<=' | '>=' ) '(' term  ( ',' term )* ')'
       )
     ;
 
@@ -1309,36 +1303,12 @@ range
 interval
     : 'INTERVAL' term timeUnitToo ;
 
-castType
-    : 'BINARY' ( '(' DECIMAL ')' )?
-    | 'CHAR' ( '(' DECIMAL ')' )? ( charset_ name )? 'BINARY'?
-    | ( 'NCHAR' | 'NATIONAL' 'CHAR' ) ( '(' DECIMAL ')' )?
-    | ( 'SIGNED' | 'UNSIGNED' )? int_?
-    | 'DATE'
-    | 'YEAR'
-    | 'TIME' ( '(' DECIMAL ')' )?
-    | 'DATETIME' ( '(' DECIMAL ')' )?
-    | dec_ floatOptions?
-    | 'JSON'
-    | 'REAL'
-    | 'DOUBLE' 'PRECISION'?
-
-    | 'FLOAT' floatOptions?
-    | 'POINT'
-    | 'LINESTRING'
-    | 'POLYGON'
-    | 'MULTIPOINT'
-    | 'MULTILINESTRING'
-    | 'MULTIPOLYGON'
-    | 'GEOMETRYCOLLECTION'
-    | 'GEOMCOLLECTION'
-    ;
-
-dataType
-    : ( int_ | 'TINYINT' | 'SMALLINT' | 'MEDIUMINT' | 'BIGINT' ) typeLength? fieldOptions_*
+type
+    : ( 'SIGNED' | 'UNSIGNED' )? ( int_ | 'TINYINT' | 'SMALLINT' | 'MEDIUMINT' | 'BIGINT' ) typePrecision? fieldOptions_*
+    | ( 'SIGNED' | 'UNSIGNED' )
     | ( 'REAL' | 'DOUBLE' 'PRECISION'? ) typePrecision? fieldOptions_*
-    | ( 'FLOAT' | dec_ | 'NUMERIC' | 'FIXED' ) floatOptions? fieldOptions_*
-    | 'BIT' typeLength?
+    | ( 'FLOAT' | dec_ | 'NUMERIC' | 'FIXED' ) typePrecision? fieldOptions_*
+    | 'BIT' typePrecision?
     | 'BOOL'
     | 'BOOLEAN'
     | ( char_ 'VARYING'?
@@ -1346,20 +1316,17 @@ dataType
       | 'NATIONAL'? 'VARCHAR'
       | 'NVARCHAR'
       | 'NCHAR' ( 'VARCHAR' | 'VARYING' )?
-      ) typeLength? characterType*
-
-    | 'BINARY' typeLength?
-
-    | 'VARBINARY' typeLength
-    | 'VECTOR' ( '(' DECIMAL ')' )?
-
-    | 'YEAR' typeLength? fieldOptions_*
+      ) typePrecision? characterType*
+    | 'BINARY' typePrecision?
+    | 'VARBINARY' typePrecision
+    | 'VECTOR' typePrecision?
+    | 'YEAR' typePrecision? fieldOptions_*
     | 'DATE'
-    | 'TIME' ( '(' DECIMAL ')' )?
-    | 'TIMESTAMP' ( '(' DECIMAL ')' )?
-    | 'DATETIME' ( '(' DECIMAL ')' )?
+    | 'TIME' typePrecision?
+    | 'TIMESTAMP' typePrecision?
+    | 'DATETIME' typePrecision?
     | 'TINYBLOB'
-    | 'BLOB' typeLength?
+    | 'BLOB' typePrecision?
 
     | 'GEOMETRY'
     | 'GEOMETRYCOLLECTION'
@@ -1370,13 +1337,12 @@ dataType
     | 'MULTILINESTRING'
     | 'POLYGON'
     | 'MULTIPOLYGON'
-
     | 'MEDIUMBLOB'
     | 'LONGBLOB'
     | 'LONG' 'VARBINARY'
     | 'LONG' ( 'CHAR' 'VARYING' | 'VARCHAR' )? characterType?
     | 'TINYTEXT' characterType?
-    | 'TEXT' typeLength? characterType?
+    | 'TEXT' typePrecision? characterType?
     | 'MEDIUMTEXT' characterType?
     | 'LONGTEXT' characterType?
     | 'ENUM' '(' term ( ',' term )* ')' characterType?
@@ -1396,14 +1362,11 @@ dataType
       ) fieldOptions_*
     ;
 
-    floatOptions
-        : typeLength | typePrecision ;
-
     typePrecision
-        : '(' DECIMAL ',' DECIMAL ')' ;
+        : '(' number ( ',' DECIMAL )? ')' ;
 
-    typeLength
-        : '(' ( DECIMAL | FLOAT ) ')' ;
+    number
+        : DECIMAL | FLOAT ;
 
     characterType
         : 'BYTE'
@@ -1471,7 +1434,7 @@ compound
         : 'THEN' ( compound ';' )+ ;
 
     declare
-        : 'DECLARE' name ( ',' name )* dataType collate? ( 'DEFAULT' term )?
+        : 'DECLARE' name ( ',' name )* type collate? ( 'DEFAULT' term )?
         | 'DECLARE' name 'CONDITION' 'FOR' sqlState
         | 'DECLARE' ( 'CONTINUE' | 'EXIT' | 'UNDO' ) 'HANDLER' 'FOR' condition ( ',' condition )* compound
         | 'DECLARE' name 'CURSOR' 'FOR' select
@@ -1518,7 +1481,7 @@ now
     : ( 'NOW' | 'CURRENT_TIMESTAMP' | 'LOCALTIME' | 'LOCALTIMESTAMP' ) ( '(' DECIMAL? ')' )? ;
 
 keyPart
-    : ( name typeLength? | '(' term ')' ) direction_? ;
+    : ( name typePrecision? | '(' term ')' ) direction_? ;
 
 decimalDefault
     : DECIMAL | 'DEFAULT' ;
@@ -1546,8 +1509,8 @@ hash
 partitionDef
     : 'PARTITION' name
         ( 'VALUES'
-            ( 'LESS' 'THAN' ( terms | 'MAXVALUE' )
-            | 'IN' terms
+            ( 'LESS' 'THAN' ( '(' term  ( ',' term )* ')' | 'MAXVALUE' )
+            | 'IN' '(' term  ( ',' term )* ')'
             )
         )?
         partitionOption*
@@ -1571,7 +1534,7 @@ definer
     : 'DEFINER' '=' user ;
 
 param
-    : ( 'IN' | 'OUT' | 'INOUT' )? name dataType ;
+    : ( 'IN' | 'OUT' | 'INOUT' )? name type ;
 
 collate
     : 'COLLATE' name ;
@@ -1667,8 +1630,6 @@ datetime
 
 byteSize
     : DECIMAL | SIZE ;
-
-
 
 exists
     : 'IF' 'EXISTS' ;
